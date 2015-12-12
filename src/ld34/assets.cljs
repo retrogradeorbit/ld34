@@ -49,6 +49,13 @@
    {:pos [72 24]
     :size [8 8]}
 
+   :click-mark-1
+   {:pos [80 24]
+    :size [8 8]}
+
+   :click-mark-2
+   {:pos [88 24]
+    :size [8 8]}
 
    }
   )

@@ -11,7 +11,8 @@
               [infinitelives.utils.sound :as sound]
               [infinitelives.utils.dom :as dom]
               [ld34.assets :as a]
-              [cljs.core.async :refer [<! chan]]
+              [ld34.shaders :as shaders]
+              [cljs.core.async :refer [<! chan put!]]
               [PIXI])
     (:require-macros [cljs.core.async.macros :refer [go]]
                      [ld34.macros :as m]
@@ -40,10 +41,66 @@
 (defonce test-text (font/make-text "500 24px Indie Flower"
                                     "Let It Grow\n"
                                     :weight 500
-                                    :fill "#ffffff"
+                                    :fill "#ff00ff"
                                     ;:stroke "#505050"
                                     ;:strokeThickness 1
                                     ))
+
+(defonce ui-state
+  (atom
+   {:screen-pos [0 0]}))
+
+
+
+(def mouse-down (chan 1))
+(def mouse-up (chan 1))
+(def mouse-move (chan 1))
+
+(defn on-mouse-down [ev]
+  (put! mouse-down [ev (.-clientX ev) (.-clientY ev)]))
+
+(defn on-mouse-up [ev]
+  (put! mouse-up [ev (.-clientX ev) (.-clientY ev)]))
+
+(defn on-mouse-move [ev]
+  (put! mouse-move [ev (.-clientX ev) (.-clientY ev)]))
+
+(.addEventListener js/window "mousedown" on-mouse-down true)
+(.addEventListener js/window "mouseup" on-mouse-up)
+(.addEventListener js/window "mousemove" on-mouse-move)
+
+(defn ui-control [setpos-fn]
+  (go
+    (while true
+      ;; wait for mouse down
+      (let [[[ev ox oy] c] (alts! #js [mouse-move mouse-up mouse-down])]
+        (cond
+          (and (= c mouse-down)
+               (= 2 (.-button ev)))
+          (do
+            (log "mouse-down")
+
+            ;; loop until mouse up
+            (loop [x 0 y 0]
+              (let [[[ev x y] c2] (alts! #js [mouse-up mouse-move])]
+                (cond
+                  (= c2 mouse-up)
+                  (log "mouse-up")
+
+                  (= c2 mouse-move)
+                  (do (log "mouse-move")
+                      (setpos-fn (- x ox) (- y oy))
+                      (recur x y))
+                  )
+                )
+              )
+            )))
+        ))
+)
+
+
+
+
 
 (defn depth-compare [a b]
   (cond
@@ -51,6 +108,7 @@
     (< (.-position.y b) (.-position.y a)) 1
     :default 0
     ))
+
 
 (defn main []
   (go
@@ -86,11 +144,16 @@
                           (texture/sub-texture sheet pos size)
                           ]))
           scale 3.0
+
+          sfx-select-man (<! (sound/load-sound "/sfx/select-man.ogg"))
           ]
 
       (sprite/set-alpha! test-text 0.0)
       (sprite/set-scale! test-text 5)
-                                        ;(set! (.-filters test-text) #js [(shaders/make-colour-bars)])
+      (set! (.-filters test-text) #js [
+                                       ;(shaders/make-colour-bars)
+                                       (shaders/make-wavy)
+                                       (shaders/make-colour-bars)])
       (.addChild (-> canvas :layer :ui) test-text)
       (resources/fadein test-text :duration 5)
       (go (loop [n 0]
@@ -98,7 +161,7 @@
                   hh (/ h 2)
                   qh (/ h 4)]
               (sprite/set-pos! test-text 0 ;-200
-                               (+ 0 (- (* 0.1 qh (Math/sin (* 0.1 n))) qh))
+                               (+ (- n) (- (* 0.1 qh (Math/sin (* 0.1 n))) qh) 1000)
                                ))
             (<! (events/next-frame))
             (recur (inc n))))
@@ -157,6 +220,7 @@
                 (set! (.-mousedown (-> canvas :layer :bg))
                       (fn [ev] (log "BG" ev)
                         (log (.-originalEvent.clientX ev) (.-originalEvent.clientY ev))
+                        (sound/play-sound sfx-select-man 0.5 false)
                         (reset! dest
                                 (vec2/vec2
                                  (- (.-originalEvent.clientX ev)
@@ -176,6 +240,16 @@
 
                 (println tests)
                 (.log js/console tests)
+
+                ;; start ui control thread
+                (ui-control
+                 (fn [x y]
+                   (let [xp (- (- x (/ (.-width (:canvas canvas)) 2)))
+                         yp (- (- y (/ (.-height (:canvas canvas)) 2)))]
+                     (sprite/set-pivot! (-> canvas :layer :world) xp yp)
+                     (sprite/set-pivot! (-> canvas :layer :bg) xp yp))
+                   )
+                 )
 
                 (loop [pos (vec2/vec2 0 0)]
                   (.sort (.-children (-> canvas :layer :world)) depth-compare )
