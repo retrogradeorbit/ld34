@@ -56,8 +56,6 @@
                            :foreign-libs
                            [{:file "src/js/pixi.js"
                              :provides ["PIXI"]}]
-
-
                            }}]}
 
   :figwheel { ;; :http-server-root "public" ;; default and assumes "resources"
