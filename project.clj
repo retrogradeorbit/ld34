@@ -29,7 +29,16 @@
                            :asset-path "js/compiled/out"
                            :output-to "resources/public/js/compiled/ld34.js"
                            :output-dir "resources/public/js/compiled/out"
-                           :source-map-timestamp true}}
+                           :source-map-timestamp true
+
+                           ;; pixi uses techniques incompatible with
+                           ;; google closure optimisation, so we preserve
+                           ;; its namespace
+                           :externs ["src/js/pixi-externs.js"]
+                           :foreign-libs
+                           [{:file "src/js/pixi.js"
+                             :provides ["PIXI"]}]
+                           }}
                ;; This next build is an compressed minified build for
                ;; production. You can build this with:
                ;; lein cljsbuild once min
@@ -38,9 +47,20 @@
                 :compiler {:output-to "resources/public/js/compiled/ld34.js"
                            :main ld34.core
                            :optimizations :advanced
-                           :pretty-print false}}]}
+                           :pretty-print false
 
-  :figwheel {;; :http-server-root "public" ;; default and assumes "resources"
+                           ;; pixi uses techniques incompatible with
+                           ;; google closure optimisation, so we preserve
+                           ;; its namespace
+                           :externs ["src/js/pixi-externs.js"]
+                           :foreign-libs
+                           [{:file "src/js/pixi.js"
+                             :provides ["PIXI"]}]
+
+
+                           }}]}
+
+  :figwheel { ;; :http-server-root "public" ;; default and assumes "resources"
              ;; :server-port 3449 ;; default
              ;; :server-ip "127.0.0.1"
 
