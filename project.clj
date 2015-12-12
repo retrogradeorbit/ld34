@@ -10,6 +10,7 @@
 
                  ;; our library
                  [infinitelives.pixi/infinitelives.pixi "0.1.0-SNAPSHOT"]
+                 [infinitelives.procedural/infinitelives.procedural "0.1.0-SNAPSHOT"]
                  ]
 
   :plugins [[lein-cljsbuild "1.1.1"]
@@ -37,7 +38,10 @@
                            :externs ["src/js/pixi-externs.js"]
                            :foreign-libs
                            [{:file "src/js/pixi.js"
-                             :provides ["PIXI"]}]
+                             :provides ["PIXI"]}
+                            {:file "src/js/perlin.js"
+                             :provides ["noise"]}
+                            ]
                            }}
                ;; This next build is an compressed minified build for
                ;; production. You can build this with:
@@ -55,7 +59,10 @@
                            :externs ["src/js/pixi-externs.js"]
                            :foreign-libs
                            [{:file "src/js/pixi.js"
-                             :provides ["PIXI"]}]
+                             :provides ["PIXI"]}
+                            {:file "src/js/perlin.js"
+                             :provides ["noise"]}
+                            ]
                            }}]}
 
   :figwheel { ;; :http-server-root "public" ;; default and assumes "resources"

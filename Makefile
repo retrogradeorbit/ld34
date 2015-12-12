@@ -18,3 +18,6 @@ sfx:
 
 	-mkdir resources/public/sfx/
 	cp src/sfx/*.ogg resources/public/sfx/
+
+release:
+	lein cljsbuild once min

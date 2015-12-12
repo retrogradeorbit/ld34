@@ -10,8 +10,10 @@
               [infinitelives.utils.vec2 :as vec2]
               [infinitelives.utils.sound :as sound]
               [infinitelives.utils.dom :as dom]
+              [infinitelives.procedural.maps :as maps]
               [ld34.assets :as a]
               [ld34.shaders :as shaders]
+              [ld34.boid :as boid]
               [cljs.core.async :refer [<! chan put!]]
               [PIXI])
     (:require-macros [cljs.core.async.macros :refer [go]]
@@ -77,7 +79,7 @@
         (cond
           (and (= c mouse-down)
                (= 2 (.-button ev)))
-          (do
+          (let [[start-x start-y] (:screen-pos @ui-state)]
             (log "mouse-down")
 
             ;; loop until mouse up
@@ -85,11 +87,13 @@
               (let [[[ev x y] c2] (alts! #js [mouse-up mouse-move])]
                 (cond
                   (= c2 mouse-up)
-                  (log "mouse-up")
+                  (do (log "mouse-up")
+                      (setpos-fn (- start-x (- x ox)) (- start-y (- y oy)))
+                      (swap! ui-state assoc :screen-pos [(- start-x (- x ox)) (- start-y (- y oy))]))
 
                   (= c2 mouse-move)
                   (do (log "mouse-move")
-                      (setpos-fn (- x ox) (- y oy))
+                      (setpos-fn (- start-x (- x ox)) (- start-y (- y oy)))
                       (recur x y))
                   )
                 )
@@ -145,13 +149,25 @@
                           ]))
           scale 3.0
 
+          map-width 50
+          map-height 50
+          half-map-width 25
+          half-map-height 25
+          all-cells (for [x (range map-width) y (range map-height)]
+                      [x y])
+          cell-width 200
+          cell-height 200
+          half-cell-width 100
+          half-cell-height 100
+          level-map (maps/make-rpg-map map-width map-height 1)
+
           sfx-select-man (<! (sound/load-sound "/sfx/select-man.ogg"))
           ]
 
       (sprite/set-alpha! test-text 0.0)
       (sprite/set-scale! test-text 5)
       (set! (.-filters test-text) #js [
-                                       ;(shaders/make-colour-bars)
+                                        ;(shaders/make-colour-bars)
                                        (shaders/make-wavy)
                                        (shaders/make-colour-bars)])
       (.addChild (-> canvas :layer :ui) test-text)
@@ -169,100 +185,172 @@
 
 
       (m/with-sprite-set canvas :bg
-        [tests (for [n (range 150)]
-                 (sprite/make-sprite
-                  ((rand-nth [:ground-1 :ground-2]) assets)
-                  :scale [(* 2 scale) (* 2 scale)]
-                  :x (math/rand-between -1000 1000)
-                  :y (math/rand-between -1000 1000)
-                  :xhandle 0.5 :yhandle 0.5
-                  :alpha 1.0))]
+        [tests (filter identity (for [cell all-cells
+                                     n (range 3)]
+                                  (let  [[x y] cell]
+                                    (if (and (not= "water" (level-map cell))
+                                             (not= "sand" (level-map cell)))
+                                      (sprite/make-sprite
+                                       ((rand-nth [:ground-1 :ground-2]) assets)
+                                       :scale [(* 2 scale) (* 2 scale)]
+                                       :x (math/rand-between (- (* cell-width (- x half-map-width)) half-cell-width)
+                                                             (+ (* cell-width (- x half-map-width))
+                                                                half-cell-width))
+                                       :y (math/rand-between (- (* cell-height (- y half-map-height)) half-cell-height)
+                                                             (+ (* cell-height (- y half-map-height))
+                                                                half-cell-height))
+                                       :xhandle 0.5 :yhandle 0.5
+                                       :alpha 1.0)))))]
 
         (m/with-sprite-set canvas :bg
-          [grass (for [n (range 300)]
-                   (sprite/make-sprite
-                    ((rand-nth [:grass-1 :grass-2 :grass-3]) assets)
-                    :scale [(* 2 scale) (* 2 scale)]
-                    :x (math/rand-between -1000 1000)
-                    :y (math/rand-between -1000 1000)
-                    :xhandle 0.5 :yhandle 0.5
-                    :alpha 1.0)
-                   )]
+          [grass (filter identity
+                         (for [cell all-cells
+                               n (range 2)]
+                           (let [[x y] cell]
+                             (when (or
+                                    (= "grass" (level-map cell))
+                                    (= "trees" (level-map cell)))
+                               (sprite/make-sprite
+                                ((rand-nth [:grass-1 :grass-2 :grass-3]) assets)
+                                :scale [(* 2 scale) (* 2 scale)]
+                                :x (math/rand-between (- (* cell-width (- x half-map-width)) half-cell-width)
+                                                      (+ (* cell-width (- x half-map-width))
+                                                         half-cell-width))
+                                :y (math/rand-between (- (* cell-height (- y half-map-height)) half-cell-height)
+                                                      (+ (* cell-height (- y half-map-height))
+                                                         half-cell-height))
+                                :xhandle 0.5 :yhandle 0.5
+                                :alpha 1.0)))
+                           ))]
 
           (m/with-sprite-set canvas :world
-            [trees (for [n (range 500)]
-                     (sprite/make-sprite
-                      ((rand-nth [:tree-1 :tree-2 :tree-3 :tree-4 :tree-5 :tree-6]) assets)
-                      :scale [(* 2 scale) (* 2 scale)]
-                      :x (math/rand-between -1000 1000)
-                      :y (math/rand-between -1000 1000)
-                      :xhandle 0.5 :yhandle 1.0
-                      :alpha 1.0
-                      ))]
-            (m/with-sprite canvas :world
-              [walker (sprite/make-sprite
-                       (:char-1 assets)
-                       :scale [(* 2 scale) (* 2 scale)]
-                       :x 0 :y 0
-                       :xhandle 0.5 :yhandle 1.0
-                       :alpha 1.0
-                       )]
+            [trees (filter identity
+                           (for [cell all-cells
+                                 n (range 5)]
+                             (let [[x y] cell]
+                               (when (= "trees" (level-map cell))
+                                 (sprite/make-sprite
+                                  ((rand-nth [:tree-1 :tree-2 :tree-3 :tree-4 :tree-5 :tree-6]) assets)
+                                  :scale [(* 2 scale) (* 2 scale)]
+                                  :x (math/rand-between -3000 3000)
+                                  :y (math/rand-between -3000 3000)
+                                  :xhandle 0.5 :yhandle 1.0
+                                  :alpha 1.0
+                                  )))))]
+            (m/with-sprite-set canvas :bg
+              [sand (filter identity
+                           (for [cell all-cells
+                                 n (range 2)]
+                             (let [[x y] cell]
+                               (when (= "sand" (level-map cell))
+                                 (sprite/make-sprite
+                                  ((rand-nth [:sand-1 :sand-2 :sand-3 :sand-4]) assets)
+                                  :scale [(* 2 scale) (* 2 scale)]
+                                  :x (math/rand-between -3000 3000)
+                                  :y (math/rand-between -3000 3000)
+                                  :xhandle 0.5 :yhandle 1.0
+                                  :alpha 1.0
+                                  )))))]
+              (m/with-sprite canvas :world
+                [walker (sprite/make-sprite
+                         (:char-1 assets)
+                         :scale [(* 2 scale) (* 2 scale)]
+                         :x 0 :y 0
+                         :xhandle 0.5 :yhandle 1.0
+                         :alpha 1.0
+                         )]
 
-              (let [bg-chan (chan)
-                    dest (atom (vec2/vec2 100 100))]
-                (set! (.-interactive walker) true)
-                (set! (.-mousedown walker) (fn [ev] (log "mousedown" ev)))
+                (let [bg-chan (chan)
+                      dest (atom (vec2/vec2 0.1 0.1))]
+                  (set! (.-interactive walker) true)
+                  (set! (.-mousedown walker) (fn [ev] (log "mousedown" ev)))
 
-                (set! (.-interactive (-> canvas :stage)) true)
-                (set! (.-mousedown (-> canvas :stage)) (fn [ev] (log "MD" ev)))
+                  (set! (.-interactive (-> canvas :stage)) true)
+                  (set! (.-mousedown (-> canvas :stage)) (fn [ev] (log "MD" ev)))
 
-                (set! (.-interactive (-> canvas :layer :bg)) true)
-                (set! (.-mousedown (-> canvas :layer :bg))
-                      (fn [ev] (log "BG" ev)
-                        (log (.-originalEvent.clientX ev) (.-originalEvent.clientY ev))
-                        (sound/play-sound sfx-select-man 0.5 false)
-                        (reset! dest
-                                (vec2/vec2
-                                 (- (.-originalEvent.clientX ev)
-                                    (/  (.-width (:canvas canvas)) 2))
-                                 (- (.-originalEvent.clientY ev)
-                                    (/ (.-height (:canvas canvas)) 2))))
+                  (set! (.-interactive (-> canvas :layer :bg)) true)
+                  (set! (.-mousedown (-> canvas :layer :bg))
+                        (fn [ev] (log "BG" ev)
+                          (log (.-originalEvent.clientX ev) (.-originalEvent.clientY ev))
+                          (go
+                            (sound/play-sound sfx-select-man 0.5 false)
+                            (let [x (- (.-originalEvent.clientX ev)
+                                       (/  (.-width (:canvas canvas)) 2))
+                                  y (- (.-originalEvent.clientY ev)
+                                       (/ (.-height (:canvas canvas)) 2))]
+                              (m/with-sprite canvas :ui
+                                [click
+                                 (sprite/make-sprite
+                                  (:click-mark-1 assets)
+                                  :scale [(* 2 scale) (* 2 scale)]
+                                  :x x :y y
+                                  :xhandle 0.45 :yhandle 0.6)]
+
+                                (<! (events/wait-time 100)))
+                              (m/with-sprite canvas :ui
+                                [click
+                                 (sprite/make-sprite
+                                  (:click-mark-2 assets)
+                                  :scale [(* 2 scale) (* 2 scale)]
+                                  :x x :y y
+                                  :xhandle 0.45 :yhandle 0.6)]
+
+                                (<! (events/wait-time 100))))
+                            )
+                          (reset! dest
+                                  (vec2/add
+                                   (let [[x y] (:screen-pos @ui-state)]
+                                     (vec2/vec2 x y))
+                                   (vec2/vec2
+                                    (- (.-originalEvent.clientX ev)
+                                       (/  (.-width (:canvas canvas)) 2))
+                                    (- (.-originalEvent.clientY ev)
+                                       (/ (.-height (:canvas canvas)) 2)))))
                                         ;(put! bg-chan ev)
-                        ))
+                          ))
 
-                (set! (.-onmousedown (:canvas canvas))
-                      (fn [e] (when (= 2 (.-button e)) (log "right"))))
+                  (set! (.-onmousedown (:canvas canvas))
+                        (fn [e] (when (= 2 (.-button e)) (log "right"))))
 
-                (set! (.-oncontextmenu (:canvas canvas))
-                      (fn [e] (.preventDefault e)))
+                  (set! (.-oncontextmenu (:canvas canvas))
+                        (fn [e] (.preventDefault e)))
 
-                (.sort (.-children (-> canvas :layer :world)) depth-compare )
-
-                (println tests)
-                (.log js/console tests)
-
-                ;; start ui control thread
-                (ui-control
-                 (fn [x y]
-                   (let [xp (- (- x (/ (.-width (:canvas canvas)) 2)))
-                         yp (- (- y (/ (.-height (:canvas canvas)) 2)))]
-                     (sprite/set-pivot! (-> canvas :layer :world) xp yp)
-                     (sprite/set-pivot! (-> canvas :layer :bg) xp yp))
-                   )
-                 )
-
-                (loop [pos (vec2/vec2 0 0)]
                   (.sort (.-children (-> canvas :layer :world)) depth-compare )
-                  (<! (events/next-frame))
-                  (let [dir (vec2/scale (vec2/direction pos @dest) 1.2)
-                        newpos (vec2/add pos dir)]
-                    (sprite/set-pos! walker newpos)
-                    (recur newpos))
 
-                  ))
 
-                                        ;(<! (events/wait-time 100000))
-              )))
+                  ;; start ui control thread
+                  (ui-control
+                   (fn [x y]
+                     (let [xp x
+                           yp y]
+                       (sprite/set-pivot! (-> canvas :layer :world) xp yp)
+                       (sprite/set-pivot! (-> canvas :layer :bg) xp yp))
+                     )
+                   )
+
+
+
+
+                  (loop [b {:mass 5.0
+                            :pos (vec2/vec2 0 0)
+                            :vel (vec2/vec2 0 0)
+                            :max-force 2.0
+                            :max-speed 2.0}]
+                    (.sort (.-children (-> canvas :layer :world)) depth-compare )
+                    (<! (events/next-frame))
+
+                                        ;(log (str b))
+
+                    (let [nb (boid/arrive b @dest 30.0)]
+                                        ;(log (str nb))
+                      (sprite/set-pos! walker (:pos nb))
+                      (recur nb)
+                      )
+
+                    ))
+
+                                        ;(<! (events/wait-time 300000))
+                ))))
 
         )
 
