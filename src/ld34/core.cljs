@@ -7,10 +7,11 @@
               [infinitelives.pixi.texture :as texture]
               [infinitelives.pixi.font :as font]
               [infinitelives.utils.math :as math]
+              [infinitelives.utils.vec2 :as vec2]
               [infinitelives.utils.sound :as sound]
               [infinitelives.utils.dom :as dom]
               [ld34.assets :as a]
-              [cljs.core.async :refer [<!]]
+              [cljs.core.async :refer [<! chan]]
               [PIXI])
     (:require-macros [cljs.core.async.macros :refer [go]]
                      [ld34.macros :as m]
@@ -57,7 +58,7 @@
     (<! (resources/load-resources
          (-> canvas :layer :ui)
          [
-                                        ;"sfx/splash-screen.ogg"
+          "sfx/select-man.ogg"
           "img/sprites.png"
                                         ;"img/stars.png"
           "http://fonts.gstatic.com/s/indieflower/v8/10JVD_humAd5zP2yrFqw6ugdm0LZdjqr5-oayXSOefg.woff2"
@@ -135,13 +136,59 @@
                       :xhandle 0.5 :yhandle 1.0
                       :alpha 1.0
                       ))]
+            (m/with-sprite canvas :world
+              [walker (sprite/make-sprite
+                       (:char-1 assets)
+                       :scale [(* 2 scale) (* 2 scale)]
+                       :x 0 :y 0
+                       :xhandle 0.5 :yhandle 1.0
+                       :alpha 1.0
+                       )]
 
-            (.sort (.-children (-> canvas :layer :world)) depth-compare )
+              (let [bg-chan (chan)
+                    dest (atom (vec2/vec2 100 100))]
+                (set! (.-interactive walker) true)
+                (set! (.-mousedown walker) (fn [ev] (log "mousedown" ev)))
 
-            (println tests)
-            (.log js/console tests)
+                (set! (.-interactive (-> canvas :stage)) true)
+                (set! (.-mousedown (-> canvas :stage)) (fn [ev] (log "MD" ev)))
 
-            (<! (events/wait-time 100000))))
+                (set! (.-interactive (-> canvas :layer :bg)) true)
+                (set! (.-mousedown (-> canvas :layer :bg))
+                      (fn [ev] (log "BG" ev)
+                        (log (.-originalEvent.clientX ev) (.-originalEvent.clientY ev))
+                        (reset! dest
+                                (vec2/vec2
+                                 (- (.-originalEvent.clientX ev)
+                                    (/  (.-width (:canvas canvas)) 2))
+                                 (- (.-originalEvent.clientY ev)
+                                    (/ (.-height (:canvas canvas)) 2))))
+                                        ;(put! bg-chan ev)
+                        ))
+
+                (set! (.-onmousedown (:canvas canvas))
+                      (fn [e] (when (= 2 (.-button e)) (log "right"))))
+
+                (set! (.-oncontextmenu (:canvas canvas))
+                      (fn [e] (.preventDefault e)))
+
+                (.sort (.-children (-> canvas :layer :world)) depth-compare )
+
+                (println tests)
+                (.log js/console tests)
+
+                (loop [pos (vec2/vec2 0 0)]
+                  (.sort (.-children (-> canvas :layer :world)) depth-compare )
+                  (<! (events/next-frame))
+                  (let [dir (vec2/scale (vec2/direction pos @dest) 1.2)
+                        newpos (vec2/add pos dir)]
+                    (sprite/set-pos! walker newpos)
+                    (recur newpos))
+
+                  ))
+
+                                        ;(<! (events/wait-time 100000))
+              )))
 
         )
 
