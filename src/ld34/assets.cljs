@@ -89,7 +89,7 @@
    {:pos [120 16]
     :size [8 8]}
 
-   :button-shield
+   :button-spray
    {:pos [136 16]
     :size [8 8]}
 

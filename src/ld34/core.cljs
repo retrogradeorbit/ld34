@@ -245,9 +245,11 @@
             :walker {:buttons false
                      :action :walk ;; :walk :plant
                      :action-count 0 ;; when we want to measure how long weve been in an action for
+                     ;; if were harvesting, this is the plant
+                     :chopping nil
                      }
             :plants #{}
-            :flies #{(new-flies (vec2/vec2 0 0))}
+            :flies #{(new-flies (vec2/vec2 0 2000))}
             })
 
 
@@ -286,6 +288,17 @@
                         )
                    flies))
             )
+
+          update-tree-chop
+          (fn []
+            (when (-> @game :walker :chopping)
+              (let [frame (-> @game :walker :action-count)
+                    plant (-> @game :walker :chopping)
+                    x (.-position.x (:sprite plant))
+                    y (.-position.y (:sprite plant))]
+                (if (= 0 (mod (int (/ frame 5)) 2))
+                  (sprite/set-pos! (:sprite plant) (+ x 1) y)
+                  (sprite/set-pos! (:sprite plant) (- x 1) y)))))
 
           fly-go-thread
           (fn [{:keys [pos sprite] :as fly}]
@@ -500,27 +513,100 @@
                                    (:button-grow assets)
                                    :scale scale-2
                                    :x 0
-                                   :y 0)]
+                                   :y 0)
+                           button-chop (sprite/make-sprite
+                                        (:button-chop assets)
+                                        :scale scale-2
+                                        :x 0
+                                        :y 0)
+                           button-spray (sprite/make-sprite
+                                         (:button-spray assets)
+                                         :scale scale-2
+                                         :x 0
+                                         :y 0)]
                           ;; on click handlers
                           (set! (.-interactive button) true)
                           (set! (.-mousedown button)
                                 ;; click on the walker
                                 (fn [ev] (log "button mousedown" ev)
-                                  (put! click-chan true)
+                                  (put! click-chan :plant)
                                   ))
 
+                          (set! (.-interactive button-chop) true)
+                          (set! (.-mousedown button-chop)
+                                ;; click on the walker
+                                (fn [ev] (log "button mousedown" ev)
+                                  (put! click-chan :chop)
+                                  ))
+
+                          (set! (.-interactive button-spray) true)
+                          (set! (.-mousedown button-spray)
+                                ;; click on the walker
+                                (fn [ev] (log "button mousedown" ev)
+                                  (put! click-chan :spray)
+                                  ))
+
+
+
                           (if (zero? (-> @game :seeds))
-                            (sprite/set-alpha! button 0.7)
+                            (sprite/set-alpha! button 0.5)
                             (sprite/set-alpha! button 1))
+
+                          (sprite/set-alpha! button-spray 0.5)
+
+                          (let [closest-plant (first
+                                               (filter
+                                                #(> (:age %) 6)
+                                                (sort-by
+                                                 #(vec2/distance-squared
+                                                   (:pos %)
+                                                   (vec2/vec2 (.-position.x walker)
+                                                              (.-position.y walker)))
+                                                 (:plants @game))))]
+                            (if closest-plant
+                              (let [distance (vec2/distance
+                                              (:pos closest-plant)
+                                              (vec2/vec2 (.-position.x walker)
+                                                         (.-position.y walker)))]
+
+                                (if (< distance 15)
+                                  (sprite/set-alpha! button-chop 1.0)
+                                  (sprite/set-alpha! button-chop 0.5)))
+                              (sprite/set-alpha! button-chop 0.5)
+                              ))
 
                           ;; move button out and up
                           (loop [b {:mass 1 :pos
-                                    (vec2/vec2 (.-position.x walker)
-                                               (- (.-position.y walker) 50))
+                                    (vec2/sub
+                                     (vec2/vec2 (.-position.x walker)
+                                                (.-position.y walker))
+                                     (vec2/vec2 0 50))
                                     :vel (vec2/vec2 0 -10)
                                     :max-force 1
-                                    :max-speed 10}]
+                                    :max-speed 10}
+                                 b2 {:mass 1 :pos
+                                     (vec2/sub
+                                      (vec2/vec2 (.-position.x walker)
+                                                 (.-position.y walker))
+                                      (vec2/vec2 0 0))
+                                     :vel
+                                     (vec2/rotate
+                                      (vec2/vec2 0 -10)
+                                      (/ Math/PI 0.5 3))
+                                     :max-force 1
+                                     :max-speed 10}
+                                 b3 {:mass 1 :pos
+                                     (vec2/vec2 (.-position.x walker)
+                                                (.-position.y walker))
+                                     :vel (vec2/rotate
+                                           (vec2/vec2 0 -10)
+                                           (/ Math/PI 0.25 3))
+                                     :max-force 1
+                                     :max-speed 10}
+                                 ]
                             (sprite/set-pos! button (:pos b))
+                            (sprite/set-pos! button-chop (:pos b2))
+                            (sprite/set-pos! button-spray (:pos b3))
                                         ;(<! (events/next-frame))
 
                             ;; keep 'arriving' while buttons is still true
@@ -528,16 +614,146 @@
                               ;; buttons is still true
                               (let [[v c] (alts! #js [(events/next-frame) click-chan])]
                                 (if (= c click-chan)
-                                  ;; a button was clicked! exit and reset
-                                  (if (zero? (-> @game :seeds))
-                                    ;; turn off button
+                                  (case v
+                                    :plant
+                                    ;; a button was clicked! exit and reset
+                                    (if (zero? (-> @game :seeds))
+                                      ;; turn off button
 
+                                      (do
+                                        (swap! game update-in [:walker :buttons] not)
+                                        (sound/play-sound sfx-button-close 0.5 false)
+                                        (loop [b b
+                                               b2 b2
+                                               b3 b3
+                                               n 10]
+                                          (sprite/set-pos! button (:pos b))
+                                          (sprite/set-pos! button-chop (:pos b2))
+                                          (sprite/set-pos! button-spray (:pos b3))
+                                          (<! (events/next-frame))
+
+                                          ;; return home
+                                          (when (pos? n)
+                                            (recur (b/arrive b
+                                                             (vec2/vec2 (.-position.x walker)
+                                                                        (.-position.y walker))
+                                                             50.0)
+                                                   (b/arrive b2
+                                                             (vec2/vec2 (.-position.x walker)
+                                                                        (.-position.y walker))
+                                                             50.0)
+                                                   (b/arrive b3
+                                                             (vec2/vec2 (.-position.x walker)
+                                                                        (.-position.y walker))
+                                                             50.0)
+                                                   (dec n)))
+                                          )
+                                        )
+
+                                      ;; select "plant seed"
+                                      (do (sound/play-sound sfx-button-select 0.7 false)
+
+                                          ;; grow and fade
+                                          (loop [n 10]
+                                            (when (pos? n)
+                                              (effects/scale! button 1.05)
+                                              (effects/scale-alpha! button 0.92)
+                                              (<! (events/next-frame))
+                                              (recur (dec n))))
+
+                                          ;; user clicked PLANT
+                                          (swap! game
+                                                 #(->
+                                                   %
+                                                   (update-in [:walker :buttons] not)
+                                                   (assoc-in [:walker :action] :plant)
+                                                   (assoc-in [:walker :action-count] 0)))))
+
+                                    ;; select "chopped"
+                                    :chop
+                                    (if (= 1 (.-alpha button-chop))
+
+                                      ;; chop
+                                      (do
+                                        (sound/play-sound sfx-button-select 0.7 false)
+
+                                        ;; grow and fade
+                                        (loop [n 10]
+                                          (when (pos? n)
+                                            (effects/scale! button-chop 1.05)
+                                            (effects/scale-alpha! button-chop 0.92)
+                                            (<! (events/next-frame))
+                                            (recur (dec n))))
+
+                                        ;; user clicked chop
+                                        (swap! game
+                                               #(->
+                                                 %
+                                                 (update-in [:walker :buttons] not)
+                                                 (assoc-in [:walker :action] :chop)
+                                                 (assoc-in [:walker :chopping]
+                                                           (first
+                                                            (filter
+                                                             (fn [pl] (> (:age pl) 6))
+                                                             (sort-by
+                                                              (fn [pl] (vec2/distance-squared
+                                                                         (:pos pl)
+                                                                         (vec2/vec2 (.-position.x walker)
+                                                                                    (.-position.y walker))))
+                                                              (:plants @game))))
+                                                           )
+                                                 (assoc-in [:walker :action-count] 0)))
+
+
+
+
+
+                                        )
+
+                                      (do
+                                        (swap! game update-in [:walker :buttons] not)
+                                        (sound/play-sound sfx-button-close 0.5 false)
+                                        (loop [b b
+                                               b2 b2
+                                               b3 b3
+                                               n 10]
+                                          (sprite/set-pos! button (:pos b))
+                                          (sprite/set-pos! button-chop (:pos b2))
+                                          (sprite/set-pos! button-spray (:pos b3))
+                                          (<! (events/next-frame))
+
+                                          ;; return home
+                                          (when (pos? n)
+                                            (recur (b/arrive b
+                                                             (vec2/vec2 (.-position.x walker)
+                                                                        (.-position.y walker))
+                                                             50.0)
+                                                   (b/arrive b2
+                                                             (vec2/vec2 (.-position.x walker)
+                                                                        (.-position.y walker))
+                                                             50.0)
+                                                   (b/arrive b3
+                                                             (vec2/vec2 (.-position.x walker)
+                                                                        (.-position.y walker))
+                                                             50.0)
+                                                   (dec n)))
+                                          )
+                                        )
+
+                                      )
+
+
+                                    ;; unknown button clicked
                                     (do
                                       (swap! game update-in [:walker :buttons] not)
                                       (sound/play-sound sfx-button-close 0.5 false)
                                       (loop [b b
+                                             b2 b2
+                                             b3 b3
                                              n 10]
                                         (sprite/set-pos! button (:pos b))
+                                        (sprite/set-pos! button-chop (:pos b2))
+                                        (sprite/set-pos! button-spray (:pos b3))
                                         (<! (events/next-frame))
 
                                         ;; return home
@@ -546,46 +762,64 @@
                                                            (vec2/vec2 (.-position.x walker)
                                                                       (.-position.y walker))
                                                            50.0)
+                                                 (b/arrive b2
+                                                           (vec2/vec2 (.-position.x walker)
+                                                                      (.-position.y walker))
+                                                           50.0)
+                                                 (b/arrive b3
+                                                           (vec2/vec2 (.-position.x walker)
+                                                                      (.-position.y walker))
+                                                           50.0)
                                                  (dec n)))
                                         )
                                       )
-
-                                    ;; select "plant seed"
-                                    (do (sound/play-sound sfx-button-select 0.7 false)
-
-                                        ;; grow and fade
-                                        (loop [n 10]
-                                          (when (pos? n)
-                                            (effects/scale! button 1.05)
-                                            (effects/scale-alpha! button 0.92)
-                                            (<! (events/next-frame))
-                                            (recur (dec n))))
-
-                                        ;; user clicked PLANT
-                                        (swap! game
-                                               #(->
-                                                 %
-                                                 (update-in [:walker :buttons] not)
-                                                 (assoc-in [:walker :action] :plant)
-                                                 (assoc-in [:walker :action-count] 0)))))
+                                    )
 
                                   ;; no button is clicked.
                                   (recur (b/arrive b
                                                    (vec2/sub
                                                     (vec2/vec2 (.-position.x walker)
                                                                (.-position.y walker))
-                                                    (vec2/vec2 0 100)) 50.0))))
+                                                    (vec2/vec2 0 100)) 50.0)
+                                         (b/arrive b2
+                                                   (vec2/sub
+                                                    (vec2/vec2 (.-position.x walker)
+                                                               (- (.-position.y walker) 0))
+                                                    (vec2/rotate
+                                                     (vec2/vec2 0 70)
+                                                     (/ Math/PI 0.5 3))) 50.0)
+                                         (b/arrive b3
+                                                   (vec2/sub
+                                                    (vec2/vec2 (.-position.x walker)
+                                                               (- (.-position.y walker) 0))
+                                                    (vec2/rotate
+                                                     (vec2/vec2 0 70)
+                                                     (/ Math/PI 0.25 3))) 50.0)
+
+                                         )))
 
                               ;; buttons is no longer true
                               (do (sound/play-sound sfx-button-close 0.5 false)
                                   (loop [b b
+                                         b2 b2
+                                         b3 b3
                                          n 10]
                                     (sprite/set-pos! button (:pos b))
+                                    (sprite/set-pos! button-chop (:pos b2))
+                                    (sprite/set-pos! button-spray (:pos b3))
                                     (<! (events/next-frame))
 
                                     ;; return home
                                     (when (pos? n)
                                       (recur (b/arrive b
+                                                       (vec2/vec2 (.-position.x walker)
+                                                                  (.-position.y walker))
+                                                       50.0)
+                                             (b/arrive b2
+                                                       (vec2/vec2 (.-position.x walker)
+                                                                  (.-position.y walker))
+                                                       50.0)
+                                             (b/arrive b3
                                                        (vec2/vec2 (.-position.x walker)
                                                                   (.-position.y walker))
                                                        50.0)
@@ -646,7 +880,8 @@
                           (swap! game #(-> %
                                            (assoc-in [:walker :action] :walk)
                                            (assoc-in [:walker :action-count] 0)
-                                           (assoc-in [:walker :buttons] false)))
+                                           (assoc-in [:walker :buttons] false)
+                                           (assoc-in [:walker :chopping] nil)))
                           (reset! dest
                                   (vec2/add
                                    (let [[x y] (:screen-pos @ui-state)]
@@ -747,6 +982,9 @@
                                              ((if (< (mod n 60) 30)
                                                 :char-work-1 :char-work-2) assets))
                         (sprite/set-texture! walker (:char-1 assets)))
+
+                      (update-tree-chop)
+
                       (recur
                        (inc n)
                        ;; this slight offset prevents the arrive silent crash I dont understand (pos goes to crazy values? divide by zero?
@@ -765,7 +1003,8 @@
 
     ))
 
-(main)
+(defonce _main (main))
+
 
 
 
