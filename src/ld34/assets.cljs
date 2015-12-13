@@ -73,5 +73,23 @@
    {:pos [8 64]
     :size [8 8]}
 
+   :button-grow
+   {:pos [104 16]
+    :size [8 8]}
+
+   :button-dig
+   {:pos [120 16]
+    :size [8 8]}
+
+   :button-shield
+   {:pos [136 16]
+    :size [8 8]}
+
+   :button-chop
+   {:pos [104 32]
+    :size [8 8]}
+
+
+
    }
   )

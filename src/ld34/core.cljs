@@ -28,7 +28,7 @@
   (canv/init
    {:expand true
     :engine :auto
-    :layers [:bg :world :ui]
+    :layers [:bg :world :float :ui]
     :background 0xa2d000 ;0x505050
     }))
 
@@ -121,6 +121,9 @@
          (-> canvas :layer :ui)
          [
           "sfx/select-man.ogg"
+          "sfx/button-open.ogg"
+          "sfx/button-close.ogg"
+          "sfx/button-select.ogg"
           "img/sprites.png"
                                         ;"img/stars.png"
           "http://fonts.gstatic.com/s/indieflower/v8/10JVD_humAd5zP2yrFqw6ugdm0LZdjqr5-oayXSOefg.woff2"
@@ -148,6 +151,7 @@
                           (texture/sub-texture sheet pos size)
                           ]))
           scale 3.0
+          scale-2 [(* 2 scale) (* 2 scale)]
 
           map-width 50
           map-height 50
@@ -162,6 +166,15 @@
           level-map (maps/make-rpg-map map-width map-height 1)
 
           sfx-select-man (<! (sound/load-sound "/sfx/select-man.ogg"))
+          sfx-button-open (<! (sound/load-sound "/sfx/button-open.ogg"))
+          sfx-button-close (<! (sound/load-sound "/sfx/button-close.ogg"))
+          sfx-button-select (<! (sound/load-sound "/sfx/button-select.ogg"))
+
+          game (atom {
+                      :walker {:buttons false}
+                      })
+
+
           ]
 
       (sprite/set-alpha! test-text 0.0)
@@ -186,13 +199,13 @@
 
       (m/with-sprite-set canvas :bg
         [tests (filter identity (for [cell all-cells
-                                     n (range 3)]
+                                      n (range 3)]
                                   (let  [[x y] cell]
                                     (if (and (not= "water" (level-map cell))
                                              (not= "sand" (level-map cell)))
                                       (sprite/make-sprite
                                        ((rand-nth [:ground-1 :ground-2]) assets)
-                                       :scale [(* 2 scale) (* 2 scale)]
+                                       :scale scale-2
                                        :x (math/rand-between (- (* cell-width (- x half-map-width)) half-cell-width)
                                                              (+ (* cell-width (- x half-map-width))
                                                                 half-cell-width))
@@ -212,7 +225,7 @@
                                     (= "trees" (level-map cell)))
                                (sprite/make-sprite
                                 ((rand-nth [:grass-1 :grass-2 :grass-3]) assets)
-                                :scale [(* 2 scale) (* 2 scale)]
+                                :scale scale-2
                                 :x (math/rand-between (- (* cell-width (- x half-map-width)) half-cell-width)
                                                       (+ (* cell-width (- x half-map-width))
                                                          half-cell-width))
@@ -231,7 +244,7 @@
                                (when (= "trees" (level-map cell))
                                  (sprite/make-sprite
                                   ((rand-nth [:tree-1 :tree-2 :tree-3 :tree-4 :tree-5 :tree-6]) assets)
-                                  :scale [(* 2 scale) (* 2 scale)]
+                                  :scale scale-2
                                   :x (math/rand-between -3000 3000)
                                   :y (math/rand-between -3000 3000)
                                   :xhandle 0.5 :yhandle 1.0
@@ -239,32 +252,115 @@
                                   )))))]
             (m/with-sprite-set canvas :bg
               [sand (filter identity
-                           (for [cell all-cells
-                                 n (range 2)]
-                             (let [[x y] cell]
-                               (when (= "sand" (level-map cell))
-                                 (sprite/make-sprite
-                                  ((rand-nth [:sand-1 :sand-2 :sand-3 :sand-4]) assets)
-                                  :scale [(* 2 scale) (* 2 scale)]
-                                  :x (math/rand-between -3000 3000)
-                                  :y (math/rand-between -3000 3000)
-                                  :xhandle 0.5 :yhandle 1.0
-                                  :alpha 1.0
-                                  )))))]
+                            (for [cell all-cells
+                                  n (range 2)]
+                              (let [[x y] cell]
+                                (when (= "sand" (level-map cell))
+                                  (sprite/make-sprite
+                                   ((rand-nth [:sand-1 :sand-2 :sand-3 :sand-4]) assets)
+                                   :scale scale-2
+                                   :x (math/rand-between -3000 3000)
+                                   :y (math/rand-between -3000 3000)
+                                   :xhandle 0.5 :yhandle 1.0
+                                   :alpha 1.0
+                                   )))))]
               (m/with-sprite canvas :world
                 [walker (sprite/make-sprite
                          (:char-1 assets)
-                         :scale [(* 2 scale) (* 2 scale)]
+                         :scale scale-2
                          :x 0 :y 0
                          :xhandle 0.5 :yhandle 1.0
                          :alpha 1.0
                          )]
 
                 (let [bg-chan (chan)
+                      click-chan (chan)
                       dest (atom (vec2/vec2 0.1 0.1))]
-                  (set! (.-interactive walker) true)
-                  (set! (.-mousedown walker) (fn [ev] (log "mousedown" ev)))
 
+                  ;; 'thread' to handle buttons on walker
+                  (go
+                    ;; forever
+                    (loop []
+                      (<! (events/next-frame))
+
+                      ;; buttons flips to true
+                      (when (-> @game :walker :buttons)
+                        (sound/play-sound sfx-button-open 0.5 false)
+                        ;; appear
+                        (m/with-sprite canvas :float
+                          [button (sprite/make-sprite
+                                   (:button-grow assets)
+                                   :scale scale-2
+                                   :x 0
+                                   :y 0)]
+                          ;; on click handlers
+                          (set! (.-interactive button) true)
+                          (set! (.-mousedown button)
+                                ;; click on the walker
+                                (fn [ev] (log "button mousedown" ev)
+                                  (put! click-chan true)
+                                  ))
+
+                            ;; move button out and up
+
+                          (loop [b {:mass 1 :pos
+                                    (vec2/vec2 (.-position.x walker)
+                                               (- (.-position.y walker) 50))
+                                    :vel (vec2/vec2 0 -10)
+                                    :max-force 1
+                                    :max-speed 10}]
+                            (sprite/set-pos! button (:pos b))
+                            (<! (events/next-frame))
+
+                            ;; keep 'arriving' while buttons is still true
+                            (if (-> @game :walker :buttons)
+                              ;; buttons is still true
+                              (let [[v c] (alts! #js [(events/next-frame) click-chan])]
+                                (if (= c click-chan)
+                                  ;; a button was clicked! exit and reset
+                                  (do (sound/play-sound sfx-button-select 0.7 false)
+
+
+                                      (swap! game update-in [:walker :buttons] not))
+
+                                  ;; no button is clicked.
+                                  (recur (boid/arrive b
+                                                      (vec2/sub
+                                                       (vec2/vec2 (.-position.x walker)
+                                                                  (.-position.y walker))
+                                                       (vec2/vec2 0 100)) 50.0))))
+
+                              ;; buttons is no longer true
+                              (do (sound/play-sound sfx-button-close 0.5 false)
+                                  (loop [b b
+                                         n 10]
+                                    (sprite/set-pos! button (:pos b))
+                                    (<! (events/next-frame))
+
+                                    ;; return home
+                                    (when (pos? n)
+                                      (recur (boid/arrive b
+                                                          (vec2/vec2 (.-position.x walker)
+                                                                     (.-position.y walker))
+                                                          50.0)
+                                             (dec n)))
+                                    )))
+                            )))
+
+                      (recur)))
+
+                  (set! (.-interactive walker) true)
+                  (set! (.-mousedown walker)
+                        ;; click on the walker
+                        (fn [ev] (log "mousedown" ev)
+
+
+                          ;; open action icons go-thread
+
+                          (swap! game update-in [:walker :buttons] not)
+
+
+                          ))
                   (set! (.-interactive (-> canvas :stage)) true)
                   (set! (.-mousedown (-> canvas :stage)) (fn [ev] (log "MD" ev)))
 
@@ -272,6 +368,8 @@
                   (set! (.-mousedown (-> canvas :layer :bg))
                         (fn [ev] (log "BG" ev)
                           (log (.-originalEvent.clientX ev) (.-originalEvent.clientY ev))
+
+                          ;; click animation
                           (go
                             (sound/play-sound sfx-select-man 0.5 false)
                             (let [x (- (.-originalEvent.clientX ev)
@@ -282,7 +380,7 @@
                                 [click
                                  (sprite/make-sprite
                                   (:click-mark-1 assets)
-                                  :scale [(* 2 scale) (* 2 scale)]
+                                  :scale scale-2
                                   :x x :y y
                                   :xhandle 0.45 :yhandle 0.6)]
 
@@ -291,12 +389,14 @@
                                 [click
                                  (sprite/make-sprite
                                   (:click-mark-2 assets)
-                                  :scale [(* 2 scale) (* 2 scale)]
+                                  :scale scale-2
                                   :x x :y y
                                   :xhandle 0.45 :yhandle 0.6)]
 
-                                (<! (events/wait-time 100))))
-                            )
+                                (<! (events/wait-time 100)))))
+
+
+
                           (reset! dest
                                   (vec2/add
                                    (let [[x y] (:screen-pos @ui-state)]
@@ -309,9 +409,11 @@
                                         ;(put! bg-chan ev)
                           ))
 
+                  ;; global handler maybe?
                   (set! (.-onmousedown (:canvas canvas))
                         (fn [e] (when (= 2 (.-button e)) (log "right"))))
 
+                  ;; no popup browser menu on right click
                   (set! (.-oncontextmenu (:canvas canvas))
                         (fn [e] (.preventDefault e)))
 
@@ -324,7 +426,8 @@
                      (let [xp x
                            yp y]
                        (sprite/set-pivot! (-> canvas :layer :world) xp yp)
-                       (sprite/set-pivot! (-> canvas :layer :bg) xp yp))
+                       (sprite/set-pivot! (-> canvas :layer :bg) xp yp)
+                       (sprite/set-pivot! (-> canvas :layer :float) xp yp))
                      )
                    )
 

@@ -50,7 +50,7 @@
                 :source-paths ["src"]
                 :compiler {:output-to "resources/public/js/compiled/ld34.js"
                            :main ld34.core
-                           :optimizations :advanced
+                           :optimizations :simple ;:advanced
                            :pretty-print false
 
                            ;; pixi uses techniques incompatible with
