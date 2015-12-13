@@ -49,6 +49,14 @@
    {:pos [72 24]
     :size [8 8]}
 
+   :char-work-1
+   {:pos [64 24]
+    :size [8 8]}
+
+   :char-work-2
+   {:pos [56 24]
+    :size [8 8]}
+
    :click-mark-1
    {:pos [80 24]
     :size [8 8]}
@@ -87,6 +95,51 @@
 
    :button-chop
    {:pos [104 32]
+    :size [8 8]}
+
+   :plant-1
+   {:pos [40 80]
+    :size [8 16]}
+
+   :plant-2
+   {:pos [48 80]
+    :size [8 16]}
+
+   :plant-3
+   {:pos [56 80]
+    :size [8 16]}
+
+   :plant-4
+   {:pos [64 80]
+    :size [8 16]}
+
+   :plant-5
+   {:pos [72 80]
+    :size [8 16]}
+
+   :plant-6
+   {:pos [80 80]
+    :size [8 16]}
+
+   :plant-7
+   {:pos [88 80]
+    :size [8 16]}
+
+
+   :flies-1
+   {:pos [104 48]
+    :size [8 8]}
+
+   :flies-2
+   {:pos [112 48]
+    :size [8 8]}
+
+   :flies-3
+   {:pos [120 48]
+    :size [8 8]}
+
+   :flies-4
+   {:pos [128 48]
     :size [8 8]}
 
 

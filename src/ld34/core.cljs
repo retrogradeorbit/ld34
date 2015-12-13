@@ -11,9 +11,11 @@
               [infinitelives.utils.sound :as sound]
               [infinitelives.utils.dom :as dom]
               [infinitelives.procedural.maps :as maps]
+              ;[clojure.string :as string]
               [ld34.assets :as a]
               [ld34.shaders :as shaders]
-              [ld34.boid :as boid]
+              [ld34.boid :as b]
+              [ld34.effects :as effects]
               [cljs.core.async :refer [<! chan put!]]
               [PIXI])
     (:require-macros [cljs.core.async.macros :refer [go]]
@@ -36,12 +38,13 @@
                (<! (events/next-frame))
                ((:render-fn canvas)))))
 
-(defonce load-fonts (font/google ["Indie Flower"]))
+(defonce load-fonts (font/google ["Share Tech Mono" "Sue Ellen Francisco"]))
 
 
-(defonce font-inconsolata (font/make-tiled-font "Indie Flower" 100 10))
-(defonce test-text (font/make-text "500 24px Indie Flower"
-                                    "Let It Grow\n"
+(defonce font-sharetech (font/make-tiled-font "Share Tech Mono" 100 10))
+(defonce font-francisco (font/make-tiled-font "Sue Ellen Francisco" 100 10))
+(defonce test-text (font/make-text "500 24px Sue Ellen Francisco"
+                                    "\nLet It Grow\n"
                                     :weight 500
                                     :fill "#ff00ff"
                                     ;:stroke "#505050"
@@ -124,6 +127,8 @@
           "sfx/button-open.ogg"
           "sfx/button-close.ogg"
           "sfx/button-select.ogg"
+          "sfx/tree-planted.ogg"
+          "sfx/tree-not-planted.ogg"
           "img/sprites.png"
                                         ;"img/stars.png"
           "http://fonts.gstatic.com/s/indieflower/v8/10JVD_humAd5zP2yrFqw6ugdm0LZdjqr5-oayXSOefg.woff2"
@@ -153,6 +158,38 @@
           scale 3.0
           scale-2 [(* 2 scale) (* 2 scale)]
 
+          set-pos-relative!
+          (fn [spr corner space]
+            (let [h-width (/ (.-width (:canvas canvas)) 2)
+                  h-height (/ (.-height (:canvas canvas)) 2)]
+              (case corner
+                :top-left
+                (do (sprite/set-anchor! spr 0 0)
+                    (sprite/set-pos! spr (- space h-width) (- space h-height)))
+                )
+              )
+
+            )
+
+          seed-text (font/make-text "500 12px Share Tech Mono"
+                                    ""
+                                    :weight 400
+                                    :fill "#ffffff"
+                                        ;:stroke "#505050"
+                                    :strokeThickness 0.1
+                                    )
+          _ (sprite/set-scale! seed-text 3)
+          _ (.addChild (-> canvas :layer :ui) seed-text)
+          _ (set-pos-relative! seed-text :top-left 10 )
+
+          set-seed-text
+          (fn [seeds dollars]
+            (set-pos-relative! seed-text :top-left 10 )
+            (.setText seed-text (str "S: " seeds "\n$: " dollars))
+            )
+
+          _ (set-seed-text 3 0)
+
           map-width 50
           map-height 50
           half-map-width 25
@@ -169,13 +206,184 @@
           sfx-button-open (<! (sound/load-sound "/sfx/button-open.ogg"))
           sfx-button-close (<! (sound/load-sound "/sfx/button-close.ogg"))
           sfx-button-select (<! (sound/load-sound "/sfx/button-select.ogg"))
+          sfx-tree-planted (<! (sound/load-sound "/sfx/tree-planted.ogg"))
+          sfx-tree-not-planted (<! (sound/load-sound "/sfx/tree-not-planted.ogg"))
 
-          game (atom {
-                      :walker {:buttons false}
-                      })
+
+
+
+          new-plant
+          (fn
+            [pos]
+            {
+             :age 0
+             :growth-rate 0.001
+             :pos pos
+             :sprite (sprite/make-sprite (:plant-1 assets)
+                                         :x (vec2/get-x pos)
+                                         :y (vec2/get-y pos)
+                                         :scale scale-2
+                                         :xhandle 0.5
+                                         :yhandle 1.0)})
+
+          new-flies
+          (fn [pos]
+            {:pos pos
+             :sprite (sprite/make-sprite (:flies-1 assets)
+                                         :x (vec2/get-x pos)
+                                         :y (vec2/get-y pos)
+                                         :scale scale-2
+                                         :xhandle 0.5
+                                         :yhandle 1.0)})
+
+          game
+          (atom
+           {
+            :frame 0
+            :seeds 3
+            :dollars 0
+            :walker {:buttons false
+                     :action :walk ;; :walk :plant
+                     :action-count 0 ;; when we want to measure how long weve been in an action for
+                     }
+            :plants #{}
+            :flies #{(new-flies (vec2/vec2 0 0))}
+            })
+
+
+          texture-cycle
+          (fn [texture-list frame frame-length]
+            (let [total-frames (count texture-list)]
+              (texture-list
+               (mod
+                (int (/ frame frame-length))
+                total-frames))))
+
+          update-seeds
+          (fn []
+            (let [state (-> @game :seeds)]
+              nil
+              ))
+
+          update-flies
+          (fn
+            [flies]
+            (doall (for [fly flies]
+                     (sprite/set-texture!
+                      (:sprite fly)
+                      (texture-cycle [(:flies-1 assets)
+                                      (:flies-2 assets)
+                                      (:flies-3 assets)
+                                      (:flies-4 assets)]
+                                     (:frame @game)
+                                     5))))
+            (into #{}
+                  (map
+                   ;; update fly
+                   identity
+                   #_ (fn [{:keys [sprite] :as fly}]
+
+                        )
+                   flies))
+            )
+
+          fly-go-thread
+          (fn [{:keys [pos sprite] :as fly}]
+            (go
+              (sprite/set-pos! sprite pos)
+
+              (loop []
+                ;; wait for a random time before looking for target (lower cpu)
+                (<! (events/wait-time (math/rand-between 1000 5000)))
+
+                (let [closest-plant
+                      (first
+                       (filter
+                        #(> (:age %) 2)
+                        (sort-by
+                         #(vec2/distance-squared
+                           (:pos %)
+                           (vec2/vec2 (.-position.x sprite)
+                                      (.-position.y sprite)))
+                         (:plants @game))))]
+                  (log "close:" closest-plant)
+                  (when closest-plant
+                    (when (< (vec2/distance-squared
+                              (vec2/vec2 (.-position.x sprite)
+                                         (.-position.y sprite))
+                              (:pos closest-plant))
+                             4)
+                      (swap! game update :plants
+                             #(-> %
+                                  (disj closest-plant)
+                                  (conj (update closest-plant :age
+                                                (fn [x] (- x 1)))))))
+
+                    (loop [b {:mass 0.5
+                              :pos (vec2/vec2 (.-position.x sprite)
+                                              (.-position.y sprite))
+                              :vel (vec2/zero)
+                              :max-force 0.01
+                              :max-speed 1}]
+                      (sprite/set-pos! sprite (:pos b))
+                      (<! (events/next-frame))
+                      (when (> (vec2/distance-squared
+                                (:pos b)
+                                (:pos closest-plant))
+                               4)
+                        (recur
+                         (b/arrive b (vec2/add
+                                      (vec2/vec2 0 2)
+                                      (:pos closest-plant))
+                                   100)
+                         )))
+                    )
+                  )
+
+                #_ (loop [b {:mass 0.5
+                             :pos pos
+                             :vel (vec2/zero)
+                             :max-force 0.01
+                             :max-speed 1}]
+                     (sprite/set-pos! sprite (:pos b))
+                     (<! (events/next-frame))
+                     (recur
+                      (b/arrive b (vec2/vec2 500 500) 100)
+                      ))
+
+                (recur)
+                ))
+            )
+
+          update-plants
+          (fn [plants]
+            (doall (for [plant plants]
+                     (sprite/set-texture! (:sprite plant)
+                                          (nth
+                                           [(:plant-1 assets)
+                                            (:plant-2 assets)
+                                            (:plant-3 assets)
+                                            (:plant-4 assets)
+                                            (:plant-5 assets)
+                                            (:plant-6 assets)
+                                            (:plant-7 assets)]
+                                           (max 0 (min 6 (int (:age plant))))))))
+            (into #{}
+                  (map #(-> %
+                            (update :age (fn [x] (+ x (-> % :growth-rate))))
+                            )
+                       plants))
+            )
 
 
           ]
+
+      ;; add the first fly
+      (doall
+       (for [fly (-> @game :flies)]
+         (do
+           (.addChild (-> canvas :layer :world) (:sprite fly))
+           (fly-go-thread fly))))
 
       (sprite/set-alpha! test-text 0.0)
       (sprite/set-scale! test-text 5)
@@ -301,8 +509,11 @@
                                   (put! click-chan true)
                                   ))
 
-                            ;; move button out and up
+                          (if (zero? (-> @game :seeds))
+                            (sprite/set-alpha! button 0.7)
+                            (sprite/set-alpha! button 1))
 
+                          ;; move button out and up
                           (loop [b {:mass 1 :pos
                                     (vec2/vec2 (.-position.x walker)
                                                (- (.-position.y walker) 50))
@@ -310,7 +521,7 @@
                                     :max-force 1
                                     :max-speed 10}]
                             (sprite/set-pos! button (:pos b))
-                            (<! (events/next-frame))
+                                        ;(<! (events/next-frame))
 
                             ;; keep 'arriving' while buttons is still true
                             (if (-> @game :walker :buttons)
@@ -318,17 +529,52 @@
                               (let [[v c] (alts! #js [(events/next-frame) click-chan])]
                                 (if (= c click-chan)
                                   ;; a button was clicked! exit and reset
-                                  (do (sound/play-sound sfx-button-select 0.7 false)
+                                  (if (zero? (-> @game :seeds))
+                                    ;; turn off button
 
+                                    (do
+                                      (swap! game update-in [:walker :buttons] not)
+                                      (sound/play-sound sfx-button-close 0.5 false)
+                                      (loop [b b
+                                             n 10]
+                                        (sprite/set-pos! button (:pos b))
+                                        (<! (events/next-frame))
 
-                                      (swap! game update-in [:walker :buttons] not))
+                                        ;; return home
+                                        (when (pos? n)
+                                          (recur (b/arrive b
+                                                           (vec2/vec2 (.-position.x walker)
+                                                                      (.-position.y walker))
+                                                           50.0)
+                                                 (dec n)))
+                                        )
+                                      )
+
+                                    ;; select "plant seed"
+                                    (do (sound/play-sound sfx-button-select 0.7 false)
+
+                                        ;; grow and fade
+                                        (loop [n 10]
+                                          (when (pos? n)
+                                            (effects/scale! button 1.05)
+                                            (effects/scale-alpha! button 0.92)
+                                            (<! (events/next-frame))
+                                            (recur (dec n))))
+
+                                        ;; user clicked PLANT
+                                        (swap! game
+                                               #(->
+                                                 %
+                                                 (update-in [:walker :buttons] not)
+                                                 (assoc-in [:walker :action] :plant)
+                                                 (assoc-in [:walker :action-count] 0)))))
 
                                   ;; no button is clicked.
-                                  (recur (boid/arrive b
-                                                      (vec2/sub
-                                                       (vec2/vec2 (.-position.x walker)
-                                                                  (.-position.y walker))
-                                                       (vec2/vec2 0 100)) 50.0))))
+                                  (recur (b/arrive b
+                                                   (vec2/sub
+                                                    (vec2/vec2 (.-position.x walker)
+                                                               (.-position.y walker))
+                                                    (vec2/vec2 0 100)) 50.0))))
 
                               ;; buttons is no longer true
                               (do (sound/play-sound sfx-button-close 0.5 false)
@@ -339,10 +585,10 @@
 
                                     ;; return home
                                     (when (pos? n)
-                                      (recur (boid/arrive b
-                                                          (vec2/vec2 (.-position.x walker)
-                                                                     (.-position.y walker))
-                                                          50.0)
+                                      (recur (b/arrive b
+                                                       (vec2/vec2 (.-position.x walker)
+                                                                  (.-position.y walker))
+                                                       50.0)
                                              (dec n)))
                                     )))
                             )))
@@ -397,6 +643,10 @@
 
 
 
+                          (swap! game #(-> %
+                                           (assoc-in [:walker :action] :walk)
+                                           (assoc-in [:walker :action-count] 0)
+                                           (assoc-in [:walker :buttons] false)))
                           (reset! dest
                                   (vec2/add
                                    (let [[x y] (:screen-pos @ui-state)]
@@ -433,21 +683,74 @@
 
 
 
-
-                  (loop [b {:mass 5.0
+                  (loop [n 0
+                         b {:mass 5.0
                             :pos (vec2/vec2 0 0)
                             :vel (vec2/vec2 0 0)
                             :max-force 2.0
                             :max-speed 2.0}]
+
+
                     (.sort (.-children (-> canvas :layer :world)) depth-compare )
+                    (swap! game #(-> %
+                                     (update-in [:walker :action-count] inc)
+                                     (update :frame inc)
+                                     (update :plants update-plants)
+                                     (update :flies update-flies)))
+
                     (<! (events/next-frame))
+
+                    ;; planted
+                    (let [{{:keys [action action-count]} :walker} @game]
+                      (when (and (= :plant action)
+                                 (= 400 action-count))
+                        (log "PLANT")
+
+                        ;;
+                        ;; plant a plant?
+                        ;;
+                        (let [seeds (:seeds @game)]
+                          (log "seeds:" seeds)
+                          (if (zero? seeds)
+                            ;; deny
+                            (do (sound/play-sound sfx-tree-not-planted 0.5 false)
+                                (swap! game
+                                       #(-> %
+                                            (assoc-in [:walker :action] :walk)
+                                            (assoc-in [:walker :action-count] 0))))
+
+                            (let [newplant (new-plant (:pos b))]
+                              (sound/play-sound sfx-tree-planted 0.5 false)
+                              (.addChild (-> canvas :layer :world) (:sprite newplant))
+
+
+                              (reset! dest (vec2/add
+                                            (:pos b)
+                                            (vec2/scale (vec2/random-unit) 40)))
+                              (swap! game
+                                     #(-> %
+                                          (assoc-in [:walker :action] :walk)
+                                          (assoc-in [:walker :action-count] 0)
+                                          (update :plants conj newplant)
+                                          (update :seeds dec)))
+
+                              (set-seed-text (:seeds @game) (:dollars @game))
+                              )))))
 
                                         ;(log (str b))
 
-                    (let [nb (boid/arrive b @dest 30.0)]
+                    (let [nb (b/arrive b @dest 30.0)]
                                         ;(log (str nb))
                       (sprite/set-pos! walker (:pos nb))
-                      (recur nb)
+                      (if (= :plant (-> @game :walker :action))
+                        (sprite/set-texture! walker
+                                             ((if (< (mod n 60) 30)
+                                                :char-work-1 :char-work-2) assets))
+                        (sprite/set-texture! walker (:char-1 assets)))
+                      (recur
+                       (inc n)
+                       ;; this slight offset prevents the arrive silent crash I dont understand (pos goes to crazy values? divide by zero?
+                       (assoc nb :pos (vec2/add (vec2/vec2 0.2 0.2) (:pos nb))))
                       )
 
                     ))

@@ -50,3 +50,5 @@
     (assoc boid
            :pos new-pos
            :vel new-vel)))
+
+(defn wander [:keys ])
