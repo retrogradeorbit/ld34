@@ -129,6 +129,8 @@
           "sfx/button-select.ogg"
           "sfx/tree-planted.ogg"
           "sfx/tree-not-planted.ogg"
+          "sfx/tree-chop.ogg"
+          "sfx/tree-harvest.ogg"
           "img/sprites.png"
                                         ;"img/stars.png"
           "http://fonts.gstatic.com/s/indieflower/v8/10JVD_humAd5zP2yrFqw6ugdm0LZdjqr5-oayXSOefg.woff2"
@@ -202,22 +204,24 @@
           half-cell-height 100
           level-map (maps/make-rpg-map map-width map-height 1)
 
+
+          sfx-tree-planted (<! (sound/load-sound "/sfx/tree-planted.ogg"))
+          sfx-tree-not-planted (<! (sound/load-sound "/sfx/tree-not-planted.ogg"))
+          sfx-tree-chop (<! (sound/load-sound "/sfx/tree-chop.ogg"))
           sfx-select-man (<! (sound/load-sound "/sfx/select-man.ogg"))
           sfx-button-open (<! (sound/load-sound "/sfx/button-open.ogg"))
           sfx-button-close (<! (sound/load-sound "/sfx/button-close.ogg"))
           sfx-button-select (<! (sound/load-sound "/sfx/button-select.ogg"))
-          sfx-tree-planted (<! (sound/load-sound "/sfx/tree-planted.ogg"))
-          sfx-tree-not-planted (<! (sound/load-sound "/sfx/tree-not-planted.ogg"))
-
-
-
+          sfx-tree-harvest (<! (sound/load-sound "/sfx/tree-harvest.ogg"))
+          sfx-bug-spray (<! (sound/load-sound "/sfx/bug-spray.ogg"))
 
           new-plant
           (fn
             [pos]
             {
              :age 0
-             :growth-rate 0.001
+             :growth-rate 0.002         ; 0.001
+             :id (keyword (gensym))
              :pos pos
              :sprite (sprite/make-sprite (:plant-1 assets)
                                          :x (vec2/get-x pos)
@@ -230,6 +234,16 @@
           (fn [pos]
             {:pos pos
              :sprite (sprite/make-sprite (:flies-1 assets)
+                                         :x (vec2/get-x pos)
+                                         :y (vec2/get-y pos)
+                                         :scale scale-2
+                                         :xhandle 0.5
+                                         :yhandle 1.0)})
+
+          new-hippy
+          (fn [pos]
+            {:pos pos
+             :sprite (sprite/make-sprite (:hippy-left assets)
                                          :x (vec2/get-x pos)
                                          :y (vec2/get-y pos)
                                          :scale scale-2
@@ -249,7 +263,10 @@
                      :chopping nil
                      }
             :plants #{}
-            :flies #{(new-flies (vec2/vec2 0 2000))}
+            :flies #{(new-flies (vec2/vec2 1000 1000))}
+            :hippies #{(new-hippy (vec2/vec2 0 0))}
+
+
             })
 
 
@@ -289,17 +306,95 @@
                    flies))
             )
 
+          ;; run each frame, animate the chopping tree
           update-tree-chop
           (fn []
             (when (-> @game :walker :chopping)
               (let [frame (-> @game :walker :action-count)
                     plant (-> @game :walker :chopping)
                     x (.-position.x (:sprite plant))
-                    y (.-position.y (:sprite plant))]
-                (if (= 0 (mod (int (/ frame 5)) 2))
-                  (sprite/set-pos! (:sprite plant) (+ x 1) y)
-                  (sprite/set-pos! (:sprite plant) (- x 1) y)))))
+                    y (.-position.y (:sprite plant))
+                    left-right (= 0 (mod (int (/ frame 5)) 2))
+                    intensity (mod (/ frame 30) 4)]
+                (if left-right
+                  (sprite/set-pos! (:sprite plant) (+ x intensity) y)
+                  (sprite/set-pos! (:sprite plant) (- x intensity) y)))))
 
+          chop-tree-go-thread
+          (fn [{:keys [pos sprite id] :as tree}]
+            (go
+                                        ;(log "CHOP_TREE" sprite pos tree)
+              (loop [chop-num 0]
+
+                (if (> chop-num 5)
+                  ;; tree chopped down
+                  (do
+                    (sound/play-sound sfx-tree-harvest  0.5 false)
+                    (.removeChild (-> canvas :layer :world) sprite)
+
+                    (swap! game
+                           #(-> %
+                                (assoc-in [:walker :action] :walk)
+                                (update :plants disj (first (filter
+                                                             (fn [pl]
+                                                               (= (:sprite pl) sprite))
+                                                             (:plants @game))))
+                                (update :dollars + 1000)
+                                (update :seeds inc)))
+                    (set-seed-text (:seeds @game) (:dollars @game)))
+
+
+                  (do
+
+                    (sprite/set-pos! sprite pos)
+                    (<! (events/wait-time 30))
+
+                    (if (= :walk (-> @game :walker :action))
+                      ;; exit
+                      nil
+
+
+                      (do
+
+                        ;; shake
+                        (sound/play-sound sfx-tree-chop 0.5 false)
+
+                        (loop [f 0]
+                          (when (< f 60)
+                                        ;(log "shake" (effects/shake 10 2 0.07 f))
+                            (sprite/set-pos! sprite (+
+                                                     (vec2/get-x pos)
+                                                     (effects/shake 10 2 0.07 f))
+                                             (vec2/get-y pos))
+                            (<! (events/next-frame))
+                            (recur (inc f))
+                            )
+
+                          )
+                        (recur (inc chop-num)))))))))
+
+          hippy-go-thread
+          (fn [{:keys [pos sprite] :as hippy}]
+            (go
+              (sprite/set-pos! sprite pos)
+
+              (loop [b {:mass 5
+                        :pos (vec2/vec2 (.-position.x sprite)
+                                        (.-position.y sprite))
+                        :vel (vec2/zero)
+                        :max-force 100
+                        :max-speed 3}]
+                ;(log "wander" (:pos b))
+                (if (pos? (vec2/get-x (:vel b)))
+                  (sprite/set-texture! sprite (:hippy-right assets))
+                  (sprite/set-texture! sprite (:hippy-left assets)))
+                (sprite/set-pos! sprite (:pos b))
+                (<! (events/next-frame))
+
+                (recur
+                 (b/wander b 40 10 3)))))
+
+          ;; TODO: exit this thread on death
           fly-go-thread
           (fn [{:keys [pos sprite] :as fly}]
             (go
@@ -307,7 +402,7 @@
 
               (loop []
                 ;; wait for a random time before looking for target (lower cpu)
-                (<! (events/wait-time (math/rand-between 1000 5000)))
+                (<! (events/wait-time (math/rand-between 1000 4000)))
 
                 (let [closest-plant
                       (first
@@ -325,7 +420,7 @@
                               (vec2/vec2 (.-position.x sprite)
                                          (.-position.y sprite))
                               (:pos closest-plant))
-                             4)
+                             (* 20 20))
                       (swap! game update :plants
                              #(-> %
                                   (disj closest-plant)
@@ -343,7 +438,7 @@
                       (when (> (vec2/distance-squared
                                 (:pos b)
                                 (:pos closest-plant))
-                               4)
+                               (* 10 10))
                         (recur
                          (b/arrive b (vec2/add
                                       (vec2/vec2 0 2)
@@ -364,7 +459,9 @@
                       (b/arrive b (vec2/vec2 500 500) 100)
                       ))
 
-                (recur)
+                (when ((:flies @game) fly)
+                  (log "looping:" (str fly))
+                  (recur))
                 ))
             )
 
@@ -391,12 +488,23 @@
 
           ]
 
-      ;; add the first fly
+      ;; add the first flys
       (doall
        (for [fly (-> @game :flies)]
          (do
            (.addChild (-> canvas :layer :world) (:sprite fly))
            (fly-go-thread fly))))
+
+      ;; add the first hippies
+      (doall
+       (for [hippy (-> @game :hippies)]
+         (do
+           (log "ADDING HIPPY" (:sprite hippy))
+           (.addChild (-> canvas :layer :world) (:sprite hippy))
+           (log "go thread")
+           (hippy-go-thread hippy))))
+
+
 
       (sprite/set-alpha! test-text 0.0)
       (sprite/set-scale! test-text 5)
@@ -552,7 +660,9 @@
                             (sprite/set-alpha! button 0.5)
                             (sprite/set-alpha! button 1))
 
-                          (sprite/set-alpha! button-spray 0.5)
+                          (if (< (:dollars @game) 100)
+                            (sprite/set-alpha! button-spray 0.5)
+                            (sprite/set-alpha! button-spray 1.0))
 
                           (let [closest-plant (first
                                                (filter
@@ -669,6 +779,143 @@
                                                    (assoc-in [:walker :action] :plant)
                                                    (assoc-in [:walker :action-count] 0)))))
 
+                                    ;; select "sprayed"
+                                    :spray
+                                    (if (< (:dollars @game) 100)
+                                      ;; exit
+                                      (do
+                                        (swap! game update-in [:walker :buttons] not)
+                                        (sound/play-sound sfx-button-close 0.5 false)
+                                        (loop [b b
+                                               b2 b2
+                                               b3 b3
+                                               n 10]
+                                          (sprite/set-pos! button (:pos b))
+                                          (sprite/set-pos! button-chop (:pos b2))
+                                          (sprite/set-pos! button-spray (:pos b3))
+                                          (<! (events/next-frame))
+
+                                          ;; return home
+                                          (when (pos? n)
+                                            (recur (b/arrive b
+                                                             (vec2/vec2 (.-position.x walker)
+                                                                        (.-position.y walker))
+                                                             50.0)
+                                                   (b/arrive b2
+                                                             (vec2/vec2 (.-position.x walker)
+                                                                        (.-position.y walker))
+                                                             50.0)
+                                                   (b/arrive b3
+                                                             (vec2/vec2 (.-position.x walker)
+                                                                        (.-position.y walker))
+                                                             50.0)
+                                                   (dec n)))
+                                          )
+                                        )
+
+                                      ;; spray
+                                      (do
+
+
+
+
+                                        ;; the spray
+                                        (go
+                                          (sound/play-sound sfx-bug-spray 0.3 false)
+                                          (m/with-sprite canvas :float
+                                            [spray (sprite/make-sprite
+                                                    (:spray-1 assets)
+                                                    :scale scale-2
+                                                    :x 0
+                                                    :y 0)]
+
+                                            (sprite/set-pos! spray
+                                                             (vec2/vec2
+                                                              (.-position.x walker)
+                                                              (- (.-position.y walker)
+                                                                 25)))
+
+                                            ;; find all flies in collision with the spray
+                                            (log "FLIES!!!")
+                                            (let [flies (:flies @game)
+                                                  touching (filter
+                                                            #(< (vec2/distance-squared
+                                                                 (vec2/vec2
+                                                                  (.-position.x (:sprite %))
+                                                                  (.-position.y (:sprite %)))
+                                                                 (vec2/vec2
+                                                                  (.-position.x spray)
+                                                                  (.-position.y spray)))
+                                                                ;; spray effective distance
+                                                                (* 40 40))
+                                                            flies)]
+                                              (when (not (empty? touching))
+
+                                                (log "REMOVING:" (count touching))
+
+
+
+                                                ;; kill all the touching flies
+                                                (doall (for [fly touching]
+                                                         (.removeChild (-> canvas :layer :world)
+                                                                       (:sprite fly))))
+
+                                                (swap! game update :flies (fn [flies]
+                                                                            (reduce disj
+                                                                                    flies
+                                                                                    touching)))
+
+                                                (log "NOW:" (count (:flies @game)))
+                                                (when (zero? (count (:flies @game)))
+                                                  (swap! game update :flies
+                                                         (fn [flies]
+                                                           (let [fly (new-flies (vec2/vec2 1000 1000))]
+                                                             (.addChild (-> canvas :layer :world)
+                                                                        (:sprite fly))
+                                                             (fly-go-thread fly)
+                                                             (conj flies fly)
+                                                             )))
+                                                  ))
+
+
+
+                                              )
+
+                                            (let [spray-frames
+                                                  [:spray-1
+                                                   :spray-2
+                                                   :spray-3
+                                                   :spray-4
+                                                   :spray-5]]
+                                              (loop [f 0]
+                                                (sprite/set-texture!
+                                                 spray
+                                                 (
+                                                  (nth spray-frames f)
+                                                  assets))
+                                                (<! (events/wait-time 100))
+                                                (when (< f (dec (count spray-frames)))
+                                                  (recur (inc f)))))))
+
+                                        ;; grow and fade
+                                        (loop [n 10]
+                                          (when (pos? n)
+                                            (effects/scale! button-spray 1.05)
+                                            (effects/scale-alpha! button-spray 0.92)
+                                            (<! (events/next-frame))
+                                            (recur (dec n))))
+
+                                        (swap! game
+                                               #(->
+                                                 %
+                                                 (update-in [:walker :buttons] not)
+                                                 (assoc-in [:walker :action] :walk)
+                                                 (assoc-in [:walker :chopping] nil)
+                                                 (update :dollars - 100)
+                                                 (assoc-in [:walker :action-count] 0)))
+
+                                        (set-seed-text (:seeds @game) (:dollars @game))))
+
                                     ;; select "chopped"
                                     :chop
                                     (if (= 1 (.-alpha button-chop))
@@ -685,24 +932,28 @@
                                             (<! (events/next-frame))
                                             (recur (dec n))))
 
-                                        ;; user clicked chop
-                                        (swap! game
-                                               #(->
-                                                 %
-                                                 (update-in [:walker :buttons] not)
-                                                 (assoc-in [:walker :action] :chop)
-                                                 (assoc-in [:walker :chopping]
-                                                           (first
-                                                            (filter
-                                                             (fn [pl] (> (:age pl) 6))
-                                                             (sort-by
-                                                              (fn [pl] (vec2/distance-squared
-                                                                         (:pos pl)
-                                                                         (vec2/vec2 (.-position.x walker)
-                                                                                    (.-position.y walker))))
-                                                              (:plants @game))))
-                                                           )
-                                                 (assoc-in [:walker :action-count] 0)))
+                                        (let [closest (first
+                                                       (filter
+                                                        (fn [pl] (> (:age pl) 6))
+                                                        (sort-by
+                                                         (fn [pl] (vec2/distance-squared
+                                                                   (:pos pl)
+                                                                   (vec2/vec2 (.-position.x walker)
+                                                                              (.-position.y walker))))
+                                                         (:plants @game))))]
+
+                                          ;; user clicked chop
+                                          (chop-tree-go-thread closest)
+
+                                          (swap! game
+                                                 #(->
+                                                   %
+                                                   (update-in [:walker :buttons] not)
+                                                   (assoc-in [:walker :action] :chop)
+                                                   (assoc-in [:walker :chopping]
+                                                             closest
+                                                             )
+                                                   (assoc-in [:walker :action-count] 0))))
 
 
 
@@ -772,8 +1023,7 @@
                                                            50.0)
                                                  (dec n)))
                                         )
-                                      )
-                                    )
+                                      ))
 
                                   ;; no button is clicked.
                                   (recur (b/arrive b
@@ -983,7 +1233,7 @@
                                                 :char-work-1 :char-work-2) assets))
                         (sprite/set-texture! walker (:char-1 assets)))
 
-                      (update-tree-chop)
+                                        ;(update-tree-chop)
 
                       (recur
                        (inc n)

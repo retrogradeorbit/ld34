@@ -10,3 +10,9 @@
 (defn scale-alpha! [spr f]
   (let [alpha (.-alpha spr)]
     (sprite/set-alpha! spr (* f alpha))))
+
+(defn shake [amplitude freq dampening frame]
+  (*
+   amplitude
+   (Math/sin (* frame freq))
+   (Math/exp (- (* dampening frame)))))
