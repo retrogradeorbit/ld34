@@ -57,6 +57,14 @@
    {:pos [56 24]
     :size [8 8]}
 
+   :hippy-left
+   {:pos [40 24]
+    :size [8 8]}
+
+   :hippy-right
+   {:pos [48 24]
+    :size [8 8]}
+
    :click-mark-1
    {:pos [80 24]
     :size [8 8]}
@@ -141,6 +149,26 @@
    :flies-4
    {:pos [128 48]
     :size [8 8]}
+
+   :spray-1
+   {:pos [104 56]
+    :size [16 16]}
+
+   :spray-2
+   {:pos [120 56]
+    :size [16 16]}
+
+   :spray-3
+   {:pos [136 56]
+    :size [16 16]}
+
+   :spray-4
+   {:pos [104 72]
+    :size [16 16]}
+
+   :spray-5
+   {:pos [120 72]
+    :size [16 16]}
 
 
 
