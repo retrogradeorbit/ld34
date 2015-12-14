@@ -20,6 +20,9 @@
 
   :clean-targets ^{:protect false} ["resources/public/js/compiled" "target"]
 
+  :javac-options ["-Xss1m"]
+  :jvm-opts ["-Xss1m"]
+
   :cljsbuild {:builds
               [{:id "dev"
                 :source-paths ["src"]
