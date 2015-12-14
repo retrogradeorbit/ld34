@@ -65,6 +65,34 @@
    {:pos [48 24]
     :size [8 8]}
 
+   :hippy-left-smoke
+   {:pos [40 32]
+    :size [8 8]}
+
+   :hippy-right-smoke
+   {:pos [48 32]
+    :size [8 8]}
+
+   :smoke-1
+   {:pos [56 32]
+    :size [8 8]}
+
+   :smoke-2
+   {:pos [64 32]
+    :size [8 8]}
+
+   :smoke-3
+   {:pos [72 32]
+    :size [8 8]}
+
+   :smoke-4
+   {:pos [80 32]
+    :size [8 8]}
+
+   :minus
+   {:pos [64 48]
+    :size [8 8]}
+
    :click-mark-1
    {:pos [80 24]
     :size [8 8]}
@@ -89,11 +117,15 @@
    {:pos [8 64]
     :size [8 8]}
 
+   :caravan
+   {:pos [64 104]
+    :size [24 32]}
+
    :button-grow
    {:pos [104 16]
     :size [8 8]}
 
-   :button-dig
+   :button-man
    {:pos [120 16]
     :size [8 8]}
 
@@ -103,6 +135,14 @@
 
    :button-chop
    {:pos [104 32]
+    :size [8 8]}
+
+   :button-faster
+   {:pos [120 32]
+    :size [8 8]}
+
+   :button-seed
+   {:pos [136 32]
     :size [8 8]}
 
    :plant-1

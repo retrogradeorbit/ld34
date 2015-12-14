@@ -220,8 +220,9 @@
             [pos]
             {
              :age 0
-             :growth-rate 0.002         ; 0.001
+             :growth-rate 0.001         ;0.002         ; 0.001
              :id (keyword (gensym))
+             :yield 1000
              :pos pos
              :sprite (sprite/make-sprite (:plant-1 assets)
                                          :x (vec2/get-x pos)
@@ -261,11 +262,56 @@
                      :action-count 0 ;; when we want to measure how long weve been in an action for
                      ;; if were harvesting, this is the plant
                      :chopping nil
+                     :level 0
                      }
             :plants #{}
-            :flies #{(new-flies (vec2/vec2 1000 1000))}
-            :hippies #{(new-hippy (vec2/vec2 0 0))}
+            :flies #{(new-flies (vec2/scale (vec2/random-unit) 1000))}
+            :hippies (into  #{}
+                            (for [n (range 2)] (new-hippy (vec2/scale (vec2/random-unit) 1000)))
 
+                            )
+            :caravan {:buttons false}
+
+            :max-seeds 1
+            :growth-rate 0.002
+            :chop-num 5
+            :chop-length 60
+            :plant-length 400
+
+            :levels {
+                     :man
+                     {
+                      :cost 1000
+                      :activate (fn [g]
+                                  (-> g
+                                      (update :dollars - (-> g :levels :man :cost))
+                                      (update-in [:levels :man :cost] * 2)
+                                      (update :chop-num max 1 (dec (:chop-num g)))
+                                      (update :chop-length max 10 (- (:chop-length g) 10))
+                                      (update :plant-length max 30 (- (:plant-length g) 30))
+                                      ))
+                      }
+
+                     :faster
+                     {
+                      :cost 5000
+                      :activate (fn [g]
+                                  (-> g
+                                      (update :dollars - (-> g :levels :faster :cost))
+                                      (update-in [:levels :faster :cost] * 3)
+                                      (update :growth-rate * 2)))
+                      }
+
+                     :seed
+                     {
+                      :cost 10000
+                      :activate (fn [g]
+                                  (-> g
+                                      (update :dollars - (-> g :levels :seed :cost))
+                                      (update-in [:levels :seed :cost] * 3)
+                                      (update :max-seeds inc)
+                                      ))
+                      }}
 
             })
 
@@ -321,12 +367,12 @@
                   (sprite/set-pos! (:sprite plant) (- x intensity) y)))))
 
           chop-tree-go-thread
-          (fn [{:keys [pos sprite id] :as tree}]
+          (fn [{:keys [pos sprite id yield] :as tree}]
             (go
                                         ;(log "CHOP_TREE" sprite pos tree)
               (loop [chop-num 0]
 
-                (if (> chop-num 5)
+                (if (> chop-num (:chop-num @game))
                   ;; tree chopped down
                   (do
                     (sound/play-sound sfx-tree-harvest  0.5 false)
@@ -339,8 +385,8 @@
                                                              (fn [pl]
                                                                (= (:sprite pl) sprite))
                                                              (:plants @game))))
-                                (update :dollars + 1000)
-                                (update :seeds inc)))
+                                (update :dollars + yield)
+                                (update :seeds + (math/rand-between 1 (:max-seeds %)))))
                     (set-seed-text (:seeds @game) (:dollars @game)))
 
 
@@ -360,7 +406,7 @@
                         (sound/play-sound sfx-tree-chop 0.5 false)
 
                         (loop [f 0]
-                          (when (< f 60)
+                          (when (< f (:chop-length @game))
                                         ;(log "shake" (effects/shake 10 2 0.07 f))
                             (sprite/set-pos! sprite (+
                                                      (vec2/get-x pos)
@@ -378,21 +424,228 @@
             (go
               (sprite/set-pos! sprite pos)
 
-              (loop [b {:mass 5
-                        :pos (vec2/vec2 (.-position.x sprite)
-                                        (.-position.y sprite))
-                        :vel (vec2/zero)
-                        :max-force 100
-                        :max-speed 3}]
-                ;(log "wander" (:pos b))
-                (if (pos? (vec2/get-x (:vel b)))
-                  (sprite/set-texture! sprite (:hippy-right assets))
-                  (sprite/set-texture! sprite (:hippy-left assets)))
-                (sprite/set-pos! sprite (:pos b))
-                (<! (events/next-frame))
+              (loop [boid {:mass 5
+                           :pos (vec2/vec2 (.-position.x sprite)
+                                           (.-position.y sprite))
+                           :vel (vec2/zero)
+                           :max-force 20
+                           :max-speed 3}]
 
-                (recur
-                 (b/wander b 40 10 3)))))
+                ;; hippy wander
+                (let [action (rand-nth [:wander :wander
+                                        :pause :pause :pause
+                                        :hunt
+                                        :hone
+                                        :attach :attach :attach :attach :attach
+                                        ])]
+                  (log "Action:" (str action))
+                  (case action
+                    :pause
+                    (recur
+                     (loop [n 100
+                            boid boid]
+                       (sprite/set-pos! sprite (:pos boid))
+                       (<! (events/next-frame))
+
+                       (if (pos? n)
+                         (recur (dec n) boid)
+                         boid)))
+
+                    :attach
+                    (recur
+                     (let [closest (first
+                                    (filter
+                                     #(> (:age %) 5)
+                                     (sort-by
+                                      #(vec2/distance-squared
+                                        (:pos %)
+                                        (vec2/vec2 (.-position.x sprite)
+                                                   (.-position.y sprite)))
+                                      (:plants @game))))]
+                       (log "closest" closest)
+                       (if (not closest)
+                         boid
+                         (let [dest (vec2/add
+                                     (:pos closest)
+                                     (vec2/scale
+                                      (vec2/random-unit)
+                                      50))]
+                           (loop [
+                                  boid boid]
+                             (if (pos? (vec2/get-x (:vel boid)))
+                               (sprite/set-texture! sprite (:hippy-right assets))
+                               (sprite/set-texture! sprite (:hippy-left assets)))
+                                        ;(log n (:pos boid))
+                             (sprite/set-pos! sprite (:pos boid))
+                             (<! (events/next-frame))
+
+                             (if (> (vec2/distance-squared
+                                     (:pos boid) dest)
+                                    20)
+                               (do
+                                 (log "distance-sqaured longer")
+                                 (recur
+                                  (b/arrive boid
+                                            dest
+                                            20)))
+
+                               (do
+                                 ;; smoke mode
+                                 ;; SMOKE
+                                 (log "log shorter")
+
+                                 ;; turn to face tree
+                                 (let [dir (vec2/direction dest (:pos closest))
+                                       right? (pos? (vec2/get-x dir))]
+                                   (if right?
+                                     (sprite/set-texture! sprite (:hippy-right-smoke assets))
+                                     (sprite/set-texture! sprite (:hippy-left-smoke assets)))
+
+                                   (m/with-sprite canvas :world
+                                     [smoke (sprite/make-sprite
+                                             (:smoke-1 assets)
+                                             :x (.-position.x sprite)
+                                             :y (- (.-position.y sprite) 0)
+                                             :scale [scale scale]
+                                             :xhandle 0.5
+                                             :yhandle 3.0)]
+                                     (loop [n 0]
+                                       #_ (if (zero? (mod (int (/ n 10)) 2))
+                                            (sprite/set-texture! sprite)
+                                            )
+
+                                       (sprite/set-texture! smoke
+                                                            ((nth [:smoke-1 :smoke-2
+                                                                   :smoke-3 :smoke-4]
+                                                                  (mod (int n) 4))
+                                                             assets))
+
+                                       (<! (events/wait-time 100))
+
+
+                                       (<! (events/next-frame))
+                                       (if
+                                           (and
+                                            (pos? (mod n 50))
+                                            (> (:age closest) 4)
+                                            (some #(= (:id %) (:id closest))
+                                                  (:plants @game))
+                                            )
+                                         ;; exit
+                                         boid
+
+                                         ;; negative
+                                         (do
+                                           (log "-" (count (:plants @game)))
+                                           (log "new" (str (update closest :yield - 10)))
+                                           (let [old-plant (first (filter
+                                                                   #(= (:id closest) (:id %))
+                                                                   (:plants @game)))
+
+                                                 plants (disj (:plants @game) old-plant)]
+                                             (log "--" old-plant (count plants))
+                                             (swap! game
+                                                    assoc :plants
+                                                    (conj plants (update closest :yield - 10))
+                                                    ))
+                                           (log "+" (count (:plants @game)))
+                                           (go
+                                             (m/with-sprite canvas :float
+                                               [minus (sprite/make-sprite
+                                                       (:minus assets)
+                                                       :x (.-position.x (:sprite closest))
+                                                       :y (- (.-position.y (:sprite closest)) 50)
+                                                       :scale scale-2
+                                                       :xhandle 0.5
+                                                       :yhandle 0.5)]
+                                               (loop [n 100
+                                                      y (- (.-position.y (:sprite closest)) 50)]
+                                                 (sprite/set-pos! minus (.-position.x (:sprite closest)) y)
+                                                 (sprite/set-alpha! minus (/ n 100))
+                                                 (<! (events/next-frame))
+                                                 (when (pos? n)
+                                                   (recur (dec n) (- y 2))
+                                                   )
+                                                 )
+                                               ))))
+
+                                       (if
+                                           (and
+
+                                            (> (:age closest) 4)
+                                            (some #(= (:id %) (:id closest))
+                                                  (:plants @game))
+                                            )
+                                         (recur (inc n))
+                                         boid))))
+
+
+                                 boid)))))))
+
+                    :hone
+                    (recur
+                     (let [closest (first
+                                    (filter
+                                     #(> (:age %) 2)
+                                     (sort-by
+                                      #(vec2/distance-squared
+                                        (:pos %)
+                                        (vec2/vec2 (.-position.x sprite)
+                                                   (.-position.y sprite)))
+                                      (:plants @game))))]
+                       (if (not closest)
+                         boid
+                         (loop [n 400
+                                boid boid]
+                           (if (pos? (vec2/get-x (:vel boid)))
+                             (sprite/set-texture! sprite (:hippy-right assets))
+                             (sprite/set-texture! sprite (:hippy-left assets)))
+                                        ;(log n (:pos boid))
+                           (sprite/set-pos! sprite (:pos boid))
+                           (<! (events/next-frame))
+
+                           (if (pos? n)
+                             (recur (dec n)
+                                    (b/arrive boid
+                                              (:pos closest)
+                                              20))
+                             boid)))))
+
+                    :hunt
+                    (recur
+                     (loop [n 400
+                            boid boid]
+                       (if (pos? (vec2/get-x (:vel boid)))
+                         (sprite/set-texture! sprite (:hippy-right assets))
+                         (sprite/set-texture! sprite (:hippy-left assets)))
+                                        ;(log n (:pos boid))
+                       (sprite/set-pos! sprite (:pos boid))
+                       (<! (events/next-frame))
+
+                       (if (pos? n)
+                         (recur (dec n)
+                                (b/arrive boid
+                                          (vec2/zero)
+                                          200))
+                         boid)))
+
+                    :wander
+                    (recur
+                     (loop [n 300
+                            boid boid]
+                                        ;(log "wander" (:pos b))
+                       (if (pos? (vec2/get-x (:vel boid)))
+                         (sprite/set-texture! sprite (:hippy-right assets))
+                         (sprite/set-texture! sprite (:hippy-left assets)))
+                       (sprite/set-pos! sprite (:pos boid))
+                       (<! (events/next-frame))
+
+                       (if (pos? n)
+                         (recur
+                          (dec n)
+                          (b/wander boid 40 10 3))
+                         boid
+                         ))))))))
 
           ;; TODO: exit this thread on death
           fly-go-thread
@@ -594,7 +847,14 @@
                                    :alpha 1.0
                                    )))))]
               (m/with-sprite canvas :world
-                [walker (sprite/make-sprite
+                [caravan (sprite/make-sprite
+                          (:caravan assets)
+                          :scale [(* 1.5 scale) (* 1.5 scale)]
+                          :x 0 :y 0
+                          :xhandle 0.5 :yhandle 0.85
+                          :alpha 1.0)
+
+                 walker (sprite/make-sprite
                          (:char-1 assets)
                          :scale scale-2
                          :x 0 :y 0
@@ -606,6 +866,409 @@
                       click-chan (chan)
                       dest (atom (vec2/vec2 0.1 0.1))]
 
+                  ;; 'thread' to handle buttons on caravan
+                  (go
+                    (set! (.-interactive caravan) true)
+                    (set! (.-mousedown caravan)
+                          ;; click on the caravan
+                          (fn [ev] (log "caravan mousedown" ev)
+
+
+                            ;; open action icons go-thread
+
+                            (swap! game update-in [:caravan :buttons] not)
+
+
+                            ))
+
+                    (let [man-cost (-> @game :levels :man :cost)
+                          faster-cost (-> @game :levels :faster :cost)
+                          seed-cost (-> @game :levels :seed :cost)
+                          ]
+
+                      (log "MAN:" man-cost "FASTER:" faster-cost "SEED:" seed-cost)
+
+                      ;; forever
+                      (loop []
+                        (<! (events/next-frame))
+
+                        ;; buttons flips to true
+                        (when (-> @game :caravan :buttons)
+                          (swap! game assoc-in [:walker :buttons] false)
+                          (sound/play-sound sfx-button-open 0.5 false)
+                          ;; appear
+                          (m/with-sprite canvas :float
+                            [button (sprite/make-sprite
+                                     (:button-man assets)
+                                     :scale scale-2
+                                     :x 0
+                                     :y 0)
+                             button-faster (sprite/make-sprite
+                                            (:button-faster assets)
+                                            :scale scale-2
+                                            :x 0
+                                            :y 0)
+                             button-seed (sprite/make-sprite
+                                          (:button-seed assets)
+                                          :scale scale-2
+                                          :x 0
+                                          :y 0)]
+                            ;; on click handlers
+                            (set! (.-interactive button) true)
+                            (set! (.-mousedown button)
+                                  ;; click on the walker
+                                  (fn [ev] (log "button mousedown" ev)
+                                    (put! click-chan :man)
+                                    ))
+
+                            (set! (.-interactive button-faster) true)
+                            (set! (.-mousedown button-faster)
+                                  ;; click on the walker
+                                  (fn [ev] (log "button mousedown" ev)
+                                    (put! click-chan :faster)
+                                    ))
+
+                            (set! (.-interactive button-seed) true)
+                            (set! (.-mousedown button-seed)
+                                  ;; click on the walker
+                                  (fn [ev] (log "button mousedown" ev)
+                                    (put! click-chan :seed)
+                                    ))
+
+
+
+                            ;; TURN BUTTONS ON AND OFF
+                            (let [money (:dollars @game)]
+                              (sprite/set-alpha! button (if (>= money man-cost) 1.0 0.5))
+                              (sprite/set-alpha! button-faster (if (>= money faster-cost) 1.0 0.5))
+                              (sprite/set-alpha! button-seed (if (>= money seed-cost) 1.0 0.5))
+
+                              ;; move button out and up
+                              (loop [b {:mass 1 :pos
+                                        (vec2/sub
+                                         (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                    (- (.-position.y caravan) 40))
+                                         (vec2/vec2 0 50))
+                                        :vel (vec2/vec2 0 -10)
+                                        :max-force 1
+                                        :max-speed 10}
+                                     b2 {:mass 1 :pos
+                                         (vec2/sub
+                                          (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                     (- (.-position.y caravan) 40))
+                                          (vec2/vec2 0 0))
+                                         :vel
+                                         (vec2/rotate
+                                          (vec2/vec2 0 -10)
+                                          (/ Math/PI 0.5 3))
+                                         :max-force 1
+                                         :max-speed 10}
+                                     b3 {:mass 1 :pos
+                                         (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                    (- (.-position.y caravan) 40))
+                                         :vel (vec2/rotate
+                                               (vec2/vec2 0 -10)
+                                               (/ Math/PI 0.25 3))
+                                         :max-force 1
+                                         :max-speed 10}
+                                     ]
+                                (sprite/set-pos! button (:pos b))
+                                (sprite/set-pos! button-faster (:pos b2))
+                                (sprite/set-pos! button-seed (:pos b3))
+                                        ;(<! (events/next-frame))
+
+                                ;; keep 'arriving' while buttons is still true
+                                (if (-> @game :caravan :buttons)
+                                  ;; buttons is still true
+                                  (let [[v c] (alts! #js [(events/next-frame) click-chan])]
+                                    (if (= c click-chan)
+                                      (case v
+                                        :man
+                                        ;; a button was clicked! exit and reset
+                                        (if (>= money man-cost)
+                                          (do (sound/play-sound sfx-button-select 0.7 false)
+
+                                              ;; grow and fade
+                                              (loop [n 10]
+                                                (when (pos? n)
+                                                  (effects/scale! button 1.05)
+                                                  (effects/scale-alpha! button 0.92)
+                                                  (<! (events/next-frame))
+                                                  (recur (dec n))))
+
+                                              ;; user clicked MAN
+                                              (swap! game
+                                                     #(->
+                                                       %
+                                                       ((-> % :levels :man :activate))
+                                                       (update-in [:caravan :buttons] not)
+                                                       (assoc-in [:walker :buttons] false))))
+
+                                          (do
+                                            (swap! game
+                                                   #(-> %
+
+                                                        (update-in [:caravan :buttons] not)
+                                                        (assoc-in [:walker :buttons] false)))
+                                            (sound/play-sound sfx-button-close 0.5 false)
+                                            (loop [b b
+                                                   b2 b2
+                                                   b3 b3
+                                                   n 10]
+                                              (sprite/set-pos! button (:pos b))
+                                              (sprite/set-pos! button-faster (:pos b2))
+                                              (sprite/set-pos! button-seed (:pos b3))
+                                              (<! (events/next-frame))
+
+
+
+                                              ;; return home
+                                              (when (pos? n)
+                                                (recur (b/arrive b
+                                                                 (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                                            (- (.-position.y caravan) 40))
+                                                                 50.0)
+                                                       (b/arrive b2
+                                                                 (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                                            (- (.-position.y caravan) 40))
+                                                                 50.0)
+                                                       (b/arrive b3
+                                                                 (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                                            (- (.-position.y caravan) 40))
+                                                                 50.0)
+                                                       (dec n)))
+                                              )
+                                            ))
+
+                                        ;; select "sprayed"
+                                        :faster
+                                        (if (>= money faster-cost)
+                                          (do (sound/play-sound sfx-button-select 0.7 false)
+
+                                              ;; grow and fade
+                                              (loop [n 10]
+                                                (when (pos? n)
+                                                  (effects/scale! button-faster 1.05)
+                                                  (effects/scale-alpha! button-faster 0.92)
+                                                  (<! (events/next-frame))
+                                                  (recur (dec n))))
+
+                                              ;; user clicked FASTER
+                                              (swap! game
+                                                     #(->
+                                                       %
+                                                       ((-> % :levels :faster :activate))
+                                                       (update-in [:caravan :buttons] not)
+                                                       (assoc-in [:walker :buttons] false)
+                                                       )))
+
+                                          (do
+                                            (swap! game
+                                                   #(-> %
+                                                        (update-in [:caravan :buttons] not)
+                                                        (assoc-in [:walker :buttons] false)))
+
+                                            (sound/play-sound sfx-button-close 0.5 false)
+                                            (loop [b b
+                                                   b2 b2
+                                                   b3 b3
+                                                   n 10]
+                                              (sprite/set-pos! button (:pos b))
+                                              (sprite/set-pos! button-faster (:pos b2))
+                                              (sprite/set-pos! button-seed (:pos b3))
+                                              (<! (events/next-frame))
+
+                                              ;; return home
+                                              (when (pos? n)
+                                                (recur (b/arrive b
+                                                                 (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                                            (- (.-position.y caravan) 40))
+                                                                 50.0)
+                                                       (b/arrive b2
+                                                                 (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                                            (- (.-position.y caravan) 40))
+                                                                 50.0)
+                                                       (b/arrive b3
+                                                                 (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                                            (- (.-position.y caravan) 40))
+                                                                 50.0)
+                                                       (dec n)))
+                                              )
+                                            ))
+
+                                        ;; select "chopped"
+                                        :seed
+                                        (if (>= money seed-cost)
+                                          (do (sound/play-sound sfx-button-select 0.7 false)
+
+                                              ;; grow and fade
+                                              (loop [n 10]
+                                                (when (pos? n)
+                                                  (effects/scale! button-seed 1.05)
+                                                  (effects/scale-alpha! button-seed 0.92)
+                                                  (<! (events/next-frame))
+                                                  (recur (dec n))))
+
+                                              ;; user clicked SEED
+                                              (swap! game
+                                                     #(->
+                                                       %
+                                                       ((-> % :levels :seed :activate))
+                                                       (update-in [:caravan :buttons] not)
+                                                       (assoc-in [:walker :buttons] false)
+                                                       )))
+                                          (do
+                                            (swap! game
+                                                   #(-> %
+                                                        (update-in [:caravan :buttons] not)
+                                                        (assoc-in [:walker :buttons] false)))
+                                            (sound/play-sound sfx-button-close 0.5 false)
+                                            (loop [b b
+                                                   b2 b2
+                                                   b3 b3
+                                                   n 10]
+                                              (sprite/set-pos! button (:pos b))
+                                              (sprite/set-pos! button-faster (:pos b2))
+                                              (sprite/set-pos! button-seed (:pos b3))
+                                              (<! (events/next-frame))
+
+                                              ;; return home
+                                              (when (pos? n)
+                                                (recur (b/arrive b
+                                                                 (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                                            (- (.-position.y caravan) 40))
+                                                                 50.0)
+                                                       (b/arrive b2
+                                                                 (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                                            (- (.-position.y caravan) 40))
+                                                                 50.0)
+                                                       (b/arrive b3
+                                                                 (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                                            (- (.-position.y caravan) 40))
+                                                                 50.0)
+                                                       (dec n)))
+                                              )
+                                            ))
+
+
+                                        ;; unknown button clicked
+                                        (do
+                                          (swap! game
+                                                 #(-> %
+                                                      (update-in [:caravan :buttons] not)
+                                                      (assoc-in [:walker :buttons] false)))
+
+                                          (sound/play-sound sfx-button-close 0.5 false)
+                                          (loop [b b
+                                                 b2 b2
+                                                 b3 b3
+                                                 n 10]
+                                            (sprite/set-pos! button (:pos b))
+                                            (sprite/set-pos! button-faster (:pos b2))
+                                            (sprite/set-pos! button-seed (:pos b3))
+                                            (<! (events/next-frame))
+
+                                            ;; return home
+                                            (when (pos? n)
+                                              (recur (b/arrive b
+                                                               (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                                          (- (.-position.y caravan) 40))
+                                                               50.0)
+                                                     (b/arrive b2
+                                                               (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                                          (- (.-position.y caravan) 40))
+                                                               50.0)
+                                                     (b/arrive b3
+                                                               (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                                          (- (.-position.y caravan) 40))
+                                                               50.0)
+                                                     (dec n)))
+                                            )
+                                          ))
+
+                                      ;; no button is clicked.
+                                      (recur (b/arrive b
+                                                       (vec2/sub
+                                                        (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                                   (- (.-position.y caravan) 40))
+                                                        (vec2/vec2 0 100)) 50.0)
+                                             (b/arrive b2
+                                                       (vec2/sub
+                                                        (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                                   (- (.-position.y caravan) 40))
+                                                        (vec2/rotate
+                                                         (vec2/vec2 0 70)
+                                                         (/ Math/PI 0.5 3))) 50.0)
+                                             (b/arrive b3
+                                                       (vec2/sub
+                                                        (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                                   (- (.-position.y caravan) 40))
+                                                        (vec2/rotate
+                                                         (vec2/vec2 0 70)
+                                                         (/ Math/PI 0.25 3))) 50.0)
+
+                                             )))
+
+                                  ;; buttons is no longer true
+
+                                  (do (sound/play-sound sfx-button-close 0.5 false)
+                                      (loop [b b
+                                             b2 b2
+                                             b3 b3
+                                             n 10]
+                                        (sprite/set-pos! button (:pos b))
+                                        (sprite/set-pos! button-faster (:pos b2))
+                                        (sprite/set-pos! button-seed (:pos b3))
+                                        (<! (events/next-frame))
+
+                                        ;; return home
+                                        (when (pos? n)
+                                          (recur (b/arrive b
+                                                           (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                                      (- (.-position.y caravan) 40))
+                                                           50.0)
+                                                 (b/arrive b2
+                                                           (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                                      (- (.-position.y caravan) 40))
+                                                           50.0)
+                                                 (b/arrive b3
+                                                           (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                                      (- (.-position.y caravan) 40))
+                                                           50.0)
+                                                 (dec n)))
+                                        ))
+
+                                  ;; buttons is no longer true
+                                  (do (sound/play-sound sfx-button-close 0.5 false)
+                                      (loop [b b
+                                             b2 b2
+                                             b3 b3
+                                             n 10]
+                                        (sprite/set-pos! button (:pos b))
+                                        (sprite/set-pos! button-faster (:pos b2))
+                                        (sprite/set-pos! button-seed (:pos b3))
+                                        (<! (events/next-frame))
+
+                                        ;; return home
+                                        (when (pos? n)
+                                          (recur (b/arrive b
+                                                           (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                                      (- (.-position.y caravan) 40))
+                                                           50.0)
+                                                 (b/arrive b2
+                                                           (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                                      (- (.-position.y caravan) 40))
+                                                           50.0)
+                                                 (b/arrive b3
+                                                           (vec2/vec2 (+ (.-position.x caravan) 20)
+                                                                      (- (.-position.y caravan) 40))
+                                                           50.0)
+                                                 (dec n)))
+                                        )))
+                                ))))
+
+                        (recur))))
+
                   ;; 'thread' to handle buttons on walker
                   (go
                     ;; forever
@@ -614,6 +1277,7 @@
 
                       ;; buttons flips to true
                       (when (-> @game :walker :buttons)
+                        (swap! game assoc-in [:caravan :buttons] false)
                         (sound/play-sound sfx-button-open 0.5 false)
                         ;; appear
                         (m/with-sprite canvas :float
@@ -869,7 +1533,7 @@
                                                 (when (zero? (count (:flies @game)))
                                                   (swap! game update :flies
                                                          (fn [flies]
-                                                           (let [fly (new-flies (vec2/vec2 1000 1000))]
+                                                           (let [fly (new-flies (vec2/scale (vec2/random-unit) 1000))]
                                                              (.addChild (-> canvas :layer :world)
                                                                         (:sprite fly))
                                                              (fly-go-thread fly)
@@ -1131,6 +1795,7 @@
                                            (assoc-in [:walker :action] :walk)
                                            (assoc-in [:walker :action-count] 0)
                                            (assoc-in [:walker :buttons] false)
+                                           (assoc-in [:caravan :buttons] false)
                                            (assoc-in [:walker :chopping] nil)))
                           (reset! dest
                                   (vec2/add
@@ -1188,7 +1853,7 @@
                     ;; planted
                     (let [{{:keys [action action-count]} :walker} @game]
                       (when (and (= :plant action)
-                                 (= 400 action-count))
+                                 (= (:plant-length @game) action-count))
                         (log "PLANT")
 
                         ;;
@@ -1204,7 +1869,8 @@
                                             (assoc-in [:walker :action] :walk)
                                             (assoc-in [:walker :action-count] 0))))
 
-                            (let [newplant (new-plant (:pos b))]
+                            (let [newplant (assoc (new-plant (:pos b))
+                                                  :growth-rate (:growth-rate @game))]
                               (sound/play-sound sfx-tree-planted 0.5 false)
                               (.addChild (-> canvas :layer :world) (:sprite newplant))
 
