@@ -291,37 +291,44 @@
                      {
                       :cost 1000
                       :activate (fn [g]
-                                  (-> g
-                                      (update :dollars - (-> g :levels :man :cost))
-                                      (update-in [:levels :man :cost] * 2)
-                                      (update :chop-num max 1 (dec (:chop-num g)))
-                                      (update :chop-length max 10 (- (:chop-length g) 10))
-                                      (update :plant-length max 30 (- (:plant-length g) 30))
-                                      (update :level inc)
-                                      ))
+                                  (let [res
+                                        (-> g
+                                            (update :dollars - (-> g :levels :man :cost))
+                                            (update-in [:levels :man :cost] * 2)
+                                            (update :chop-num max 1 (dec (:chop-num g)))
+                                            (update :chop-length max 10 (- (:chop-length g) 10))
+                                            (update :plant-length max 30 (- (:plant-length g) 30))
+                                            (update :level inc))]
+                                    (set-seed-text (:seeds res) (:dollars res))
+                                    res))
                       }
 
                      :faster
                      {
                       :cost 5000
                       :activate (fn [g]
-                                  (-> g
-                                      (update :dollars - (-> g :levels :faster :cost))
-                                      (update-in [:levels :faster :cost] * 3)
-                                      (update :growth-rate * 2)
-                                      (update :level inc)))
+                                  (let [res
+                                        (-> g
+                                            (update :dollars - (-> g :levels :faster :cost))
+                                            (update-in [:levels :faster :cost] * 3)
+                                            (update :growth-rate * 2)
+                                            (update :level inc))]
+                                    (set-seed-text (:seeds res) (:dollars res))
+                                    res))
                       }
 
                      :seed
                      {
                       :cost 10000
                       :activate (fn [g]
-                                  (-> g
-                                      (update :dollars - (-> g :levels :seed :cost))
-                                      (update-in [:levels :seed :cost] * 3)
-                                      (update :max-seeds inc)
-                                      (update :level inc)
-                                      ))
+                                  (let [res
+                                        (-> g
+                                            (update :dollars - (-> g :levels :seed :cost))
+                                            (update-in [:levels :seed :cost] * 3)
+                                            (update :max-seeds inc)
+                                            (update :level inc))]
+                                    (set-seed-text (:seeds res) (:dollars res))
+                                    res))
                       }}
 
             })
