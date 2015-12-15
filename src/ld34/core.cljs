@@ -703,7 +703,7 @@
                              #(-> %
                                   (disj closest-plant)
                                   (conj (update closest-plant :age
-                                                (fn [x] (- x 1)))))))
+                                                (fn [x] (- x (* 500 (:growth-rate @game)))))))))
 
                     (loop [b {:mass 0.5
                               :pos (vec2/vec2 (.-position.x sprite)
