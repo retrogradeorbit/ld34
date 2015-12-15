@@ -566,7 +566,8 @@
                                              (when old-plant
                                                (swap! game
                                                       assoc :plants
-                                                      (conj plants (update old-plant :yield - 10))
+                                                      (conj plants (update old-plant :yield
+                                                                           (fn [y] (min 10 (- y 10)))))
                                                       )))
                                            ;(log "+" (count (:plants @game)))
                                            ;(log "plants:" (str (:plants @game)))
