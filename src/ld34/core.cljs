@@ -83,19 +83,19 @@
           (and (= c mouse-down)
                (= 2 (.-button ev)))
           (let [[start-x start-y] (:screen-pos @ui-state)]
-            (log "mouse-down")
+            ;(log "mouse-down")
 
             ;; loop until mouse up
             (loop [x 0 y 0]
               (let [[[ev x y] c2] (alts! #js [mouse-up mouse-move])]
                 (cond
                   (= c2 mouse-up)
-                  (do (log "mouse-up")
+                  (do ;(log "mouse-up")
                       (setpos-fn (- start-x (- x ox)) (- start-y (- y oy)))
                       (swap! ui-state assoc :screen-pos [(- start-x (- x ox)) (- start-y (- y oy))]))
 
                   (= c2 mouse-move)
-                  (do (log "mouse-move")
+                  (do ;(log "mouse-move")
                       (setpos-fn (- start-x (- x ox)) (- start-y (- y oy)))
                       (recur x y))
                   )
@@ -131,6 +131,11 @@
           "sfx/tree-not-planted.ogg"
           "sfx/tree-chop.ogg"
           "sfx/tree-harvest.ogg"
+          "sfx/tree-grow.ogg"
+          "sfx/tree-hurt.ogg"
+          "sfx/bug-spray.ogg"
+          "sfx/fly-attack.ogg"
+          "sfx/fly-change.ogg"
           "img/sprites.png"
                                         ;"img/stars.png"
           "http://fonts.gstatic.com/s/indieflower/v8/10JVD_humAd5zP2yrFqw6ugdm0LZdjqr5-oayXSOefg.woff2"
@@ -214,6 +219,10 @@
           sfx-button-select (<! (sound/load-sound "/sfx/button-select.ogg"))
           sfx-tree-harvest (<! (sound/load-sound "/sfx/tree-harvest.ogg"))
           sfx-bug-spray (<! (sound/load-sound "/sfx/bug-spray.ogg"))
+          sfx-tree-grow (<! (sound/load-sound "/sfx/tree-grow.ogg"))
+          sfx-tree-hurt (<! (sound/load-sound "/sfx/tree-hurt.ogg"))
+          sfx-fly-attack (<! (sound/load-sound "/sfx/fly-attack.ogg"))
+          sfx-fly-change (<! (sound/load-sound "/sfx/fly-change.ogg"))
 
           new-plant
           (fn
@@ -266,7 +275,9 @@
                      }
             :plants #{}
             :flies #{(new-flies (vec2/scale (vec2/random-unit) 1000))}
-            :hippies (into  #{}
+            :hippies #{}
+
+            #_ (into  #{}
                             (for [n (range 2)] (new-hippy (vec2/scale (vec2/random-unit) 1000)))
 
                             )
@@ -428,8 +439,8 @@
                            :pos (vec2/vec2 (.-position.x sprite)
                                            (.-position.y sprite))
                            :vel (vec2/zero)
-                           :max-force 20
-                           :max-speed 3}]
+                           :max-force 0.1
+                           :max-speed 0.5}]
 
                 ;; hippy wander
                 (let [action (rand-nth [:wander :wander
@@ -438,7 +449,7 @@
                                         :hone
                                         :attach :attach :attach :attach :attach
                                         ])]
-                  (log "Action:" (str action))
+                  ;(log "Action:" (str action))
                   (case action
                     :pause
                     (recur
@@ -462,7 +473,7 @@
                                         (vec2/vec2 (.-position.x sprite)
                                                    (.-position.y sprite)))
                                       (:plants @game))))]
-                       (log "closest" closest)
+                       ;(log "closest" closest)
                        (if (not closest)
                          boid
                          (let [dest (vec2/add
@@ -483,7 +494,7 @@
                                      (:pos boid) dest)
                                     20)
                                (do
-                                 (log "distance-sqaured longer")
+                                 ;(log "distance-sqaured longer")
                                  (recur
                                   (b/arrive boid
                                             dest
@@ -492,7 +503,7 @@
                                (do
                                  ;; smoke mode
                                  ;; SMOKE
-                                 (log "log shorter")
+                                 ;(log "log shorter")
 
                                  ;; turn to face tree
                                  (let [dir (vec2/direction dest (:pos closest))
@@ -536,19 +547,22 @@
 
                                          ;; negative
                                          (do
-                                           (log "-" (count (:plants @game)))
-                                           (log "new" (str (update closest :yield - 10)))
+
+                                           ;(log "-" (count (:plants @game)) "id:" (:id closest) "closest:" closest "plants:" (str (:plants @game)))
+                                           ;(log "new" (str (update closest :yield - 10)))
                                            (let [old-plant (first (filter
                                                                    #(= (:id closest) (:id %))
                                                                    (:plants @game)))
 
                                                  plants (disj (:plants @game) old-plant)]
-                                             (log "--" old-plant (count plants))
-                                             (swap! game
-                                                    assoc :plants
-                                                    (conj plants (update closest :yield - 10))
-                                                    ))
-                                           (log "+" (count (:plants @game)))
+                                             ;(log "--" old-plant (count plants))
+                                             (when old-plant
+                                               (swap! game
+                                                      assoc :plants
+                                                      (conj plants (update old-plant :yield - 10))
+                                                      )))
+                                           ;(log "+" (count (:plants @game)))
+                                           ;(log "plants:" (str (:plants @game)))
                                            (go
                                              (m/with-sprite canvas :float
                                                [minus (sprite/make-sprite
@@ -657,6 +671,8 @@
                 ;; wait for a random time before looking for target (lower cpu)
                 (<! (events/wait-time (math/rand-between 1000 4000)))
 
+                ;(log "FLY RETARGET:" (str (:plants @game)))
+
                 (let [closest-plant
                       (first
                        (filter
@@ -667,13 +683,14 @@
                            (vec2/vec2 (.-position.x sprite)
                                       (.-position.y sprite)))
                          (:plants @game))))]
-                  (log "close:" closest-plant)
+                  ;(log "close:" closest-plant)
                   (when closest-plant
                     (when (< (vec2/distance-squared
                               (vec2/vec2 (.-position.x sprite)
                                          (.-position.y sprite))
                               (:pos closest-plant))
                              (* 20 20))
+                      (sound/play-sound sfx-tree-hurt 0.3 false)
                       (swap! game update :plants
                              #(-> %
                                   (disj closest-plant)
@@ -713,13 +730,14 @@
                       ))
 
                 (when ((:flies @game) fly)
-                  (log "looping:" (str fly))
+                  ;(log "looping:" (str fly))
                   (recur))
                 ))
             )
 
           update-plants
           (fn [plants]
+            ;(log "Update-plants:" (str plants))
             (doall (for [plant plants]
                      (sprite/set-texture! (:sprite plant)
                                           (nth
@@ -733,7 +751,12 @@
                                            (max 0 (min 6 (int (:age plant))))))))
             (into #{}
                   (map #(-> %
-                            (update :age (fn [x] (+ x (-> % :growth-rate))))
+                            (update :age
+                                    (fn [x]
+                                      (let [next (+ x (-> % :growth-rate))]
+                                        (when (> (int next) (int x))
+                                          (sound/play-sound sfx-tree-grow 0.3 false))
+                                        next)))
                             )
                        plants))
             )
@@ -752,9 +775,9 @@
       (doall
        (for [hippy (-> @game :hippies)]
          (do
-           (log "ADDING HIPPY" (:sprite hippy))
+           ;(log "ADDING HIPPY" (:sprite hippy))
            (.addChild (-> canvas :layer :world) (:sprite hippy))
-           (log "go thread")
+           ;(log "go thread")
            (hippy-go-thread hippy))))
 
 
@@ -871,7 +894,7 @@
                     (set! (.-interactive caravan) true)
                     (set! (.-mousedown caravan)
                           ;; click on the caravan
-                          (fn [ev] (log "caravan mousedown" ev)
+                          (fn [ev] ;(log "caravan mousedown" ev)
 
 
                             ;; open action icons go-thread
@@ -886,7 +909,7 @@
                           seed-cost (-> @game :levels :seed :cost)
                           ]
 
-                      (log "MAN:" man-cost "FASTER:" faster-cost "SEED:" seed-cost)
+                      ;(log "MAN:" man-cost "FASTER:" faster-cost "SEED:" seed-cost)
 
                       ;; forever
                       (loop []
@@ -917,21 +940,21 @@
                             (set! (.-interactive button) true)
                             (set! (.-mousedown button)
                                   ;; click on the walker
-                                  (fn [ev] (log "button mousedown" ev)
+                                  (fn [ev] ;(log "button mousedown" ev)
                                     (put! click-chan :man)
                                     ))
 
                             (set! (.-interactive button-faster) true)
                             (set! (.-mousedown button-faster)
                                   ;; click on the walker
-                                  (fn [ev] (log "button mousedown" ev)
+                                  (fn [ev] ;(log "button mousedown" ev)
                                     (put! click-chan :faster)
                                     ))
 
                             (set! (.-interactive button-seed) true)
                             (set! (.-mousedown button-seed)
                                   ;; click on the walker
-                                  (fn [ev] (log "button mousedown" ev)
+                                  (fn [ev] ;(log "button mousedown" ev)
                                     (put! click-chan :seed)
                                     ))
 
@@ -1300,21 +1323,21 @@
                           (set! (.-interactive button) true)
                           (set! (.-mousedown button)
                                 ;; click on the walker
-                                (fn [ev] (log "button mousedown" ev)
+                                (fn [ev] ;(log "button mousedown" ev)
                                   (put! click-chan :plant)
                                   ))
 
                           (set! (.-interactive button-chop) true)
                           (set! (.-mousedown button-chop)
                                 ;; click on the walker
-                                (fn [ev] (log "button mousedown" ev)
+                                (fn [ev] ;(log "button mousedown" ev)
                                   (put! click-chan :chop)
                                   ))
 
                           (set! (.-interactive button-spray) true)
                           (set! (.-mousedown button-spray)
                                 ;; click on the walker
-                                (fn [ev] (log "button mousedown" ev)
+                                (fn [ev] ;(log "button mousedown" ev)
                                   (put! click-chan :spray)
                                   ))
 
@@ -1500,7 +1523,7 @@
                                                                  25)))
 
                                             ;; find all flies in collision with the spray
-                                            (log "FLIES!!!")
+                                            ;(log "FLIES!!!")
                                             (let [flies (:flies @game)
                                                   touching (filter
                                                             #(< (vec2/distance-squared
@@ -1515,7 +1538,7 @@
                                                             flies)]
                                               (when (not (empty? touching))
 
-                                                (log "REMOVING:" (count touching))
+                                                ;(log "REMOVING:" (count touching))
 
 
 
@@ -1529,17 +1552,54 @@
                                                                                     flies
                                                                                     touching)))
 
-                                                (log "NOW:" (count (:flies @game)))
+                                                ;; GAME LEVEL PLAY
+                                                ;(log "NOW:" (count (:flies @game)))
                                                 (when (zero? (count (:flies @game)))
                                                   (swap! game update :flies
                                                          (fn [flies]
-                                                           (let [fly (new-flies (vec2/scale (vec2/random-unit) 1000))]
-                                                             (.addChild (-> canvas :layer :world)
-                                                                        (:sprite fly))
-                                                             (fly-go-thread fly)
-                                                             (conj flies fly)
+                                                           (let [num-new-flies (-> @game
+                                                                                   :dollars
+                                                                                   (/ 5000)
+                                                                                   int
+                                                                                   inc)
+                                                                 flies-to-add
+                                                                 (map #(new-flies (vec2/scale (vec2/random-unit) 1000))
+                                                                      (range num-new-flies))]
+                                                             (doall
+                                                              (for [fly flies-to-add]
+                                                                (do
+                                                                  (.addChild (-> canvas :layer :world)
+                                                                             (:sprite fly))
+                                                                  (fly-go-thread fly))))
+                                                             (into flies flies-to-add)
                                                              )))
-                                                  ))
+                                                  )
+                                                (let [hippies-should-be (-> @game
+                                                                                   :dollars
+                                                                                   (/ 5000)
+                                                                                   int)
+                                                      hippies-are (count (:hippies @game))]
+                                                  (when (< hippies-are
+                                                           hippies-should-be)
+                                                    (let [to-add (- hippies-should-be hippies-are)]
+                                                      (swap! game update :hippies
+                                                         (fn [hippies]
+                                                           (let [
+                                                                 hippies-to-add
+                                                                 (map #(new-hippy (vec2/scale (vec2/random-unit) 1000))
+                                                                      (range to-add))]
+                                                             (doall
+                                                              (for [hippy hippies-to-add]
+                                                                (do
+                                                                  (.addChild (-> canvas :layer :world)
+                                                                             (:sprite hippy))
+                                                                  (hippy-go-thread hippy))))
+                                                             (into hippies hippies-to-add)
+                                                             )))
+                                                      )
+                                                    ))
+
+)
 
 
 
@@ -1746,7 +1806,7 @@
                   (set! (.-interactive walker) true)
                   (set! (.-mousedown walker)
                         ;; click on the walker
-                        (fn [ev] (log "mousedown" ev)
+                        (fn [ev] ;(log "mousedown" ev)
 
 
                           ;; open action icons go-thread
@@ -1756,12 +1816,13 @@
 
                           ))
                   (set! (.-interactive (-> canvas :stage)) true)
-                  (set! (.-mousedown (-> canvas :stage)) (fn [ev] (log "MD" ev)))
+                  (set! (.-mousedown (-> canvas :stage)) (fn [ev] ;(log "MD" ev)
+                                                           ))
 
                   (set! (.-interactive (-> canvas :layer :bg)) true)
                   (set! (.-mousedown (-> canvas :layer :bg))
-                        (fn [ev] (log "BG" ev)
-                          (log (.-originalEvent.clientX ev) (.-originalEvent.clientY ev))
+                        (fn [ev] ;(log "BG" ev)
+                          ;(log (.-originalEvent.clientX ev) (.-originalEvent.clientY ev))
 
                           ;; click animation
                           (go
@@ -1811,7 +1872,8 @@
 
                   ;; global handler maybe?
                   (set! (.-onmousedown (:canvas canvas))
-                        (fn [e] (when (= 2 (.-button e)) (log "right"))))
+                        (fn [e] (when (= 2 (.-button e)) ;(log "right")
+                                  )))
 
                   ;; no popup browser menu on right click
                   (set! (.-oncontextmenu (:canvas canvas))
@@ -1854,13 +1916,13 @@
                     (let [{{:keys [action action-count]} :walker} @game]
                       (when (and (= :plant action)
                                  (= (:plant-length @game) action-count))
-                        (log "PLANT")
+                        ;(log "PLANT")
 
                         ;;
                         ;; plant a plant?
                         ;;
                         (let [seeds (:seeds @game)]
-                          (log "seeds:" seeds)
+                          ;(log "seeds:" seeds)
                           (if (zero? seeds)
                             ;; deny
                             (do (sound/play-sound sfx-tree-not-planted 0.5 false)

@@ -21,14 +21,16 @@
     (let [symb (first bindings) val (second bindings)]
       `(let [~symb ~val]
          (.addChild (get-layer ~canvas ~layer) ~symb)
-         (.log js/console "addChild" (get-layer ~canvas ~layer) ~symb)
+         ;(.log js/console "addChild" (get-layer ~canvas ~layer) ~symb)
          (with-sprite ~canvas ~layer ~(subvec bindings 2) ~@body)
          (.removeChild (get-layer ~canvas ~layer) ~symb)
-         (println "removeChild")
+         ;(println "removeChild")
          )
 
       )
-    `(do (println "doing body") ~@body)))
+    `(do ;(println "doing body")
+       ~@body
+       )))
 
 (defmacro with-sprite-set [canvas layer bindings & body]
   (assert-args

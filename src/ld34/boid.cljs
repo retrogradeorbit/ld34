@@ -112,6 +112,4 @@
     (assoc boid
            :pos new-pos
            :vel new-vel
-           :max-speed 0.5
-           :max-force 0.1
            :last-steer new-steer)))
