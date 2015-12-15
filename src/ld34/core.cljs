@@ -404,7 +404,7 @@
                                                                (= (:sprite pl) sprite))
                                                              (:plants @game))))
                                 (update :dollars + yield)
-                                (update :seeds + (math/rand-between 1 (:max-seeds %)))))
+                                (update :seeds + (:max-seeds %))))
                     (set-seed-text (:seeds @game) (:dollars @game)))
 
 
