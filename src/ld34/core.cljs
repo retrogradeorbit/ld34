@@ -136,6 +136,7 @@
           "sfx/bug-spray.ogg"
           "sfx/fly-attack.ogg"
           "sfx/fly-change.ogg"
+          "sfx/music.ogg"
           "img/sprites.png"
                                         ;"img/stars.png"
           "http://fonts.gstatic.com/s/indieflower/v8/10JVD_humAd5zP2yrFqw6ugdm0LZdjqr5-oayXSOefg.woff2"
@@ -153,7 +154,7 @@
     ;;
     ;; play music on a loop
     ;;
-    #_ (go (let [tune (<! (sound/load-sound "/sfx/splash-screen.ogg"))
+    (go (let [tune (<! (sound/load-sound "/sfx/music.ogg"))
                  [source gain] (sound/play-sound tune 0.7 true)]))
 
     (let [sheet (resources/get-texture :sprites :nearest)
@@ -276,11 +277,6 @@
             :plants #{}
             :flies #{(new-flies (vec2/scale (vec2/random-unit) 1000))}
             :hippies #{}
-
-            #_ (into  #{}
-                            (for [n (range 2)] (new-hippy (vec2/scale (vec2/random-unit) 1000)))
-
-                            )
             :caravan {:buttons false}
 
             :max-seeds 1
@@ -288,6 +284,7 @@
             :chop-num 5
             :chop-length 60
             :plant-length 400
+            :level 1
 
             :levels {
                      :man
@@ -300,6 +297,7 @@
                                       (update :chop-num max 1 (dec (:chop-num g)))
                                       (update :chop-length max 10 (- (:chop-length g) 10))
                                       (update :plant-length max 30 (- (:plant-length g) 30))
+                                      (update :level inc)
                                       ))
                       }
 
@@ -310,7 +308,8 @@
                                   (-> g
                                       (update :dollars - (-> g :levels :faster :cost))
                                       (update-in [:levels :faster :cost] * 3)
-                                      (update :growth-rate * 2)))
+                                      (update :growth-rate * 2)
+                                      (update :level inc)))
                       }
 
                      :seed
@@ -321,6 +320,7 @@
                                       (update :dollars - (-> g :levels :seed :cost))
                                       (update-in [:levels :seed :cost] * 3)
                                       (update :max-seeds inc)
+                                      (update :level inc)
                                       ))
                       }}
 
@@ -1557,11 +1557,7 @@
                                                 (when (zero? (count (:flies @game)))
                                                   (swap! game update :flies
                                                          (fn [flies]
-                                                           (let [num-new-flies (-> @game
-                                                                                   :dollars
-                                                                                   (/ 5000)
-                                                                                   int
-                                                                                   inc)
+                                                           (let [num-new-flies (:level @game)
                                                                  flies-to-add
                                                                  (map #(new-flies (vec2/scale (vec2/random-unit) 1000))
                                                                       (range num-new-flies))]
@@ -1574,10 +1570,7 @@
                                                              (into flies flies-to-add)
                                                              )))
                                                   )
-                                                (let [hippies-should-be (-> @game
-                                                                                   :dollars
-                                                                                   (/ 5000)
-                                                                                   int)
+                                                (let [hippies-should-be (dec (:level @game))
                                                       hippies-are (count (:hippies @game))]
                                                   (when (< hippies-are
                                                            hippies-should-be)
