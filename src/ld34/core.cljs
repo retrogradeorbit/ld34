@@ -1544,7 +1544,7 @@
                                                          (fn [flies]
                                                            (let [num-new-flies (:level @game)
                                                                  flies-to-add
-                                                                 (map #(new-flies (vec2/scale (vec2/random-unit) 1000))
+                                                                 (map #(new-flies (vec2/scale (vec2/random-unit) 2500))
                                                                       (range num-new-flies))]
                                                              (doall
                                                               (for [fly flies-to-add]
@@ -1564,7 +1564,7 @@
                                                          (fn [hippies]
                                                            (let [
                                                                  hippies-to-add
-                                                                 (map #(new-hippy (vec2/scale (vec2/random-unit) 1000))
+                                                                 (map #(new-hippy (vec2/scale (vec2/random-unit) 2500))
                                                                       (range to-add))]
                                                              (doall
                                                               (for [hippy hippies-to-add]
