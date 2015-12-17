@@ -363,15 +363,7 @@
                                       (:flies-4 assets)]
                                      (:frame @game)
                                      5))))
-            (into #{}
-                  (map
-                   ;; update fly
-                   identity
-                   #_ (fn [{:keys [sprite] :as fly}]
-
-                        )
-                   flies))
-            )
+            (into #{} flies))
 
           ;; run each frame, animate the chopping tree
           update-tree-chop
@@ -724,21 +716,7 @@
                          (b/arrive b (vec2/add
                                       (vec2/vec2 0 2)
                                       (:pos closest-plant))
-                                   100)
-                         )))
-                    )
-                  )
-
-                #_ (loop [b {:mass 0.5
-                             :pos pos
-                             :vel (vec2/zero)
-                             :max-force 0.01
-                             :max-speed 1}]
-                     (sprite/set-pos! sprite (:pos b))
-                     (<! (events/next-frame))
-                     (recur
-                      (b/arrive b (vec2/vec2 500 500) 100)
-                      ))
+                                   100))))))
 
                 (when ((:flies @game) fly)
                   ;(log "looping:" (str fly))
