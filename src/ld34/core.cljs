@@ -328,7 +328,7 @@
                                             (update :dollars - (-> g :levels :seed :cost))
                                             (update-in [:levels :seed :cost] * 3)
                                             (update :max-seeds inc)
-                                            (update :plant-multiplier * 10)
+                                            (update :plant-multiplier * 2)
                                             (update :level inc))]
                                     (set-seed-text (:seeds res) (:dollars res))
                                     res))
