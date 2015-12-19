@@ -497,8 +497,6 @@
 
                                (do
                                  ;; smoke mode
-                                 ;; SMOKE
-                                 ;(log "log shorter")
 
                                  ;; turn to face tree
                                  (let [dir (vec2/direction dest (:pos closest))
@@ -516,19 +514,12 @@
                                              :xhandle 0.5
                                              :yhandle 3.0)]
                                      (loop [n 0]
-                                       #_ (if (zero? (mod (int (/ n 10)) 2))
-                                            (sprite/set-texture! sprite)
-                                            )
-
                                        (sprite/set-texture! smoke
                                                             ((nth [:smoke-1 :smoke-2
                                                                    :smoke-3 :smoke-4]
                                                                   (mod (int n) 4))
                                                              assets))
-
                                        (<! (events/wait-time 100))
-
-
                                        (<! (events/next-frame))
                                        (if
                                            (and
