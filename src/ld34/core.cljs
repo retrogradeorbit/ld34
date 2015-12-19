@@ -111,8 +111,8 @@
 
 (defn depth-compare [a b]
   (cond
-    (< (.-position.y a) (.-position.y b)) -1
-    (< (.-position.y b) (.-position.y a)) 1
+    (< (sprite/get-y a) (sprite/get-y b)) -1
+    (< (sprite/get-y b) (sprite/get-y a)) 1
     :default 0
     ))
 
@@ -371,8 +371,7 @@
             (when (-> @game :walker :chopping)
               (let [frame (-> @game :walker :action-count)
                     plant (-> @game :walker :chopping)
-                    x (.-position.x (:sprite plant))
-                    y (.-position.y (:sprite plant))
+                    [x y] (sprite/get-xy (:sprite plant))
                     left-right (= 0 (mod (int (/ frame 5)) 2))
                     intensity (mod (/ frame 30) 4)]
                 (if left-right
@@ -508,8 +507,8 @@
                                    (m/with-sprite canvas :world
                                      [smoke (sprite/make-sprite
                                              (:smoke-1 assets)
-                                             :x (.-position.x sprite)
-                                             :y (- (.-position.y sprite) 0)
+                                             :x (sprite/get-x e)
+                                             :y (- (sprite/get-y e) 0)
                                              :scale [scale scale]
                                              :xhandle 0.5
                                              :yhandle 3.0)]
@@ -554,14 +553,14 @@
                                              (m/with-sprite canvas :float
                                                [minus (sprite/make-sprite
                                                        (:minus assets)
-                                                       :x (.-position.x (:sprite closest))
-                                                       :y (- (.-position.y (:sprite closest)) 50)
+                                                       :x (sprite/get-x (:sprite closest))
+                                                       :y (- (sprite/get-y (:sprite closest)) 50)
                                                        :scale scale-2
                                                        :xhandle 0.5
                                                        :yhandle 0.5)]
                                                (loop [n 100
-                                                      y (- (.-position.y (:sprite closest)) 50)]
-                                                 (sprite/set-pos! minus (.-position.x (:sprite closest)) y)
+                                                      y (- (sprite/get-y (:sprite closest)) 50)]
+                                                 (sprite/set-pos! minus (sprite/get-x (:sprite closest)) y)
                                                  (sprite/set-alpha! minus (/ n 100))
                                                  (<! (events/next-frame))
                                                  (when (pos? n)
@@ -1513,16 +1512,7 @@
                                                                   (.addChild (-> canvas :layer :world)
                                                                              (:sprite hippy))
                                                                   (hippy-go-thread hippy))))
-                                                             (into hippies hippies-to-add)
-                                                             )))
-                                                      )
-                                                    ))
-
-)
-
-
-
-                                              )
+                                                             (into hippies hippies-to-add)))))))))
 
                                             (let [spray-frames
                                                   [:spray-1
