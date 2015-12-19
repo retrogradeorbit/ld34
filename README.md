@@ -8,11 +8,15 @@ My entry for Ludum Dare 43. Themes were 'Growing' and 'Two button controls'
 
 ## Overview
 
-HTML5 game in clojurescript. Everything from scratch in 72 hours.
+HTML5 game in clojurescript. Everything from scratch in 72 hours. Graphics done in grafx2. Sound Effects done in jsfxr. Music done in OpenMPT.
 
 Play it now!
 
 [ld34.procrustes.net](http://ld34.procrustes.net)
+
+Runs best in Chrome!
+
+[Ludum Dare entry page](http://ludumdare.com/compo/ludum-dare-34/?action=preview&uid=40126)
 
 ## Instructions
 
