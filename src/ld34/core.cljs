@@ -298,7 +298,7 @@
                                             (update-in [:levels :man :cost] * 2)
                                             (update :chop-num #(max 1 (dec %)))
                                             (update :chop-length #(max 10 (- % 10)))
-                                            (update :plant-length #(max 30 (- % 30)))
+                                            (update :plant-length #(max 30 (- % 70)))
                                             (update :level inc))]
                                     (set-seed-text (:seeds res) (:dollars res))
 
