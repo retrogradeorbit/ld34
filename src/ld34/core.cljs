@@ -490,9 +490,9 @@
                              (sprite/set-pos! sprite (:pos boid))
                              (<! (events/next-frame))
 
-                             (if (> (vec2/distance-squared
-                                     (:pos boid) dest)
-                                    20)
+                             (if (-> boid :pos
+                                     (vec2/distance-squared dest)
+                                     (> 20))
                                (do
                                  ;(log "distance-sqaured longer")
                                  (recur
