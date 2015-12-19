@@ -438,8 +438,7 @@
               (sprite/set-pos! sprite pos)
 
               (loop [boid {:mass 5
-                           :pos (vec2/vec2 (.-position.x sprite)
-                                           (.-position.y sprite))
+                           :pos (sprite/get-pos sprite)
                            :vel (vec2/zero)
                            :max-force 0.1
                            :max-speed 0.5}]
@@ -472,8 +471,7 @@
                                      (sort-by
                                       #(vec2/distance-squared
                                         (:pos %)
-                                        (vec2/vec2 (.-position.x sprite)
-                                                   (.-position.y sprite)))
+                                        (sprite/get-pos sprite))
                                       (:plants @game))))]
                        ;(log "closest" closest)
                        (if (not closest)
@@ -607,8 +605,7 @@
                                      (sort-by
                                       #(vec2/distance-squared
                                         (:pos %)
-                                        (vec2/vec2 (.-position.x sprite)
-                                                   (.-position.y sprite)))
+                                        (sprite/get-pos sprite))
                                       (:plants @game))))]
                        (if (not closest)
                          boid
@@ -683,14 +680,12 @@
                         (sort-by
                          #(vec2/distance-squared
                            (:pos %)
-                           (vec2/vec2 (.-position.x sprite)
-                                      (.-position.y sprite)))
+                           (sprite/get-pos sprite))
                          (:plants @game))))]
                   ;(log "close:" closest-plant)
                   (when closest-plant
                     (when (< (vec2/distance-squared
-                              (vec2/vec2 (.-position.x sprite)
-                                         (.-position.y sprite))
+                              (sprite/get-pos sprite)
                               (:pos closest-plant))
                              (* 20 20))
                       (sound/play-sound sfx-tree-hurt 0.3 false)
@@ -701,8 +696,7 @@
                                                 (fn [x] (- x (* 500 (:growth-rate @game)))))))))
 
                     (loop [b {:mass 0.5
-                              :pos (vec2/vec2 (.-position.x sprite)
-                                              (.-position.y sprite))
+                              :pos (sprite/get-pos sprite)
                               :vel (vec2/zero)
                               :max-force 0.01
                               :max-speed 1}]
@@ -951,16 +945,14 @@
                             ;; move button out and up
                             (loop [b {:mass 1 :pos
                                       (vec2/sub
-                                       (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                  (- (.-position.y caravan) 40))
+                                       (sprite/get-pos caravan 20 -40)
                                        (vec2/vec2 0 50))
                                       :vel (vec2/vec2 0 -10)
                                       :max-force 1
                                       :max-speed 10}
                                    b2 {:mass 1 :pos
                                        (vec2/sub
-                                        (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                   (- (.-position.y caravan) 40))
+                                        (sprite/get-pos caravan 20 -40)
                                         (vec2/vec2 0 0))
                                        :vel
                                        (vec2/rotate
@@ -969,8 +961,7 @@
                                        :max-force 1
                                        :max-speed 10}
                                    b3 {:mass 1 :pos
-                                       (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                  (- (.-position.y caravan) 40))
+                                       (sprite/get-pos caravan 20 -40)
                                        :vel (vec2/rotate
                                              (vec2/vec2 0 -10)
                                              (/ Math/PI 0.25 3))
@@ -1033,16 +1024,13 @@
                                             ;; return home
                                             (when (pos? n)
                                               (recur (b/arrive b
-                                                               (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                                          (- (.-position.y caravan) 40))
+                                                               (sprite/get-pos caravan 20 -40)
                                                                50.0)
                                                      (b/arrive b2
-                                                               (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                                          (- (.-position.y caravan) 40))
+                                                               (sprite/get-pos caravan 20 -40)
                                                                50.0)
                                                      (b/arrive b3
-                                                               (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                                          (- (.-position.y caravan) 40))
+                                                               (sprite/get-pos caravan 20 -40)
                                                                50.0)
                                                      (dec n)))
                                             )
@@ -1089,16 +1077,13 @@
                                             ;; return home
                                             (when (pos? n)
                                               (recur (b/arrive b
-                                                               (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                                          (- (.-position.y caravan) 40))
+                                                               (sprite/get-pos caravan 20 -40)
                                                                50.0)
                                                      (b/arrive b2
-                                                               (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                                          (- (.-position.y caravan) 40))
+                                                               (sprite/get-pos caravan 20 -40)
                                                                50.0)
                                                      (b/arrive b3
-                                                               (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                                          (- (.-position.y caravan) 40))
+                                                               (sprite/get-pos caravan 20 -40)
                                                                50.0)
                                                      (dec n)))
                                             )
@@ -1143,16 +1128,13 @@
                                             ;; return home
                                             (when (pos? n)
                                               (recur (b/arrive b
-                                                               (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                                          (- (.-position.y caravan) 40))
+                                                               (sprite/get-pos caravan 20 -40)
                                                                50.0)
                                                      (b/arrive b2
-                                                               (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                                          (- (.-position.y caravan) 40))
+                                                               (sprite/get-pos caravan 20 -40)
                                                                50.0)
                                                      (b/arrive b3
-                                                               (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                                          (- (.-position.y caravan) 40))
+                                                               (sprite/get-pos caravan 20 -40)
                                                                50.0)
                                                      (dec n)))
                                             )
@@ -1179,16 +1161,13 @@
                                           ;; return home
                                           (when (pos? n)
                                             (recur (b/arrive b
-                                                             (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                                        (- (.-position.y caravan) 40))
+                                                             (sprite/get-pos caravan 20 -40)
                                                              50.0)
                                                    (b/arrive b2
-                                                             (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                                        (- (.-position.y caravan) 40))
+                                                             (sprite/get-pos caravan 20 -40)
                                                              50.0)
                                                    (b/arrive b3
-                                                             (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                                        (- (.-position.y caravan) 40))
+                                                             (sprite/get-pos caravan 20 -40)
                                                              50.0)
                                                    (dec n)))
                                           )
@@ -1197,20 +1176,17 @@
                                     ;; no button is clicked.
                                     (recur (b/arrive b
                                                      (vec2/sub
-                                                      (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                                 (- (.-position.y caravan) 40))
+                                                      (sprite/get-pos caravan 20 -40)
                                                       (vec2/vec2 0 100)) 50.0)
                                            (b/arrive b2
                                                      (vec2/sub
-                                                      (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                                 (- (.-position.y caravan) 40))
+                                                      (sprite/get-pos caravan 20 -40)
                                                       (vec2/rotate
                                                        (vec2/vec2 0 70)
                                                        (/ Math/PI 0.5 3))) 50.0)
                                            (b/arrive b3
                                                      (vec2/sub
-                                                      (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                                 (- (.-position.y caravan) 40))
+                                                      (sprite/get-pos caravan 20 -40)
                                                       (vec2/rotate
                                                        (vec2/vec2 0 70)
                                                        (/ Math/PI 0.25 3))) 50.0)
@@ -1232,16 +1208,13 @@
                                       ;; return home
                                       (when (pos? n)
                                         (recur (b/arrive b
-                                                         (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                                    (- (.-position.y caravan) 40))
+                                                         (sprite/get-pos caravan 20 -40)
                                                          50.0)
                                                (b/arrive b2
-                                                         (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                                    (- (.-position.y caravan) 40))
+                                                         (sprite/get-pos caravan 20 -40)
                                                          50.0)
                                                (b/arrive b3
-                                                         (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                                    (- (.-position.y caravan) 40))
+                                                         (sprite/get-pos caravan 20 -40)
                                                          50.0)
                                                (dec n)))
                                       ))
@@ -1260,16 +1233,13 @@
                                       ;; return home
                                       (when (pos? n)
                                         (recur (b/arrive b
-                                                         (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                                    (- (.-position.y caravan) 40))
+                                                         (sprite/get-pos caravan 20 -40)
                                                          50.0)
                                                (b/arrive b2
-                                                         (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                                    (- (.-position.y caravan) 40))
+                                                         (sprite/get-pos caravan 20 -40)
                                                          50.0)
                                                (b/arrive b3
-                                                         (vec2/vec2 (+ (.-position.x caravan) 20)
-                                                                    (- (.-position.y caravan) 40))
+                                                         (sprite/get-pos caravan 20 -40)
                                                          50.0)
                                                (dec n)))
                                       )))
@@ -1342,14 +1312,12 @@
                                                 (sort-by
                                                  #(vec2/distance-squared
                                                    (:pos %)
-                                                   (vec2/vec2 (.-position.x walker)
-                                                              (.-position.y walker)))
+                                                   (sprite/get-pos walker))
                                                  (:plants @game))))]
                             (if closest-plant
                               (let [distance (vec2/distance
                                               (:pos closest-plant)
-                                              (vec2/vec2 (.-position.x walker)
-                                                         (.-position.y walker)))]
+                                              (sprite/get-pos walker))]
 
                                 (if (< distance 15)
                                   (sprite/set-alpha! button-chop 1.0)
@@ -1360,16 +1328,14 @@
                           ;; move button out and up
                           (loop [b {:mass 1 :pos
                                     (vec2/sub
-                                     (vec2/vec2 (.-position.x walker)
-                                                (.-position.y walker))
+                                     (sprite/get-pos walker)
                                      (vec2/vec2 0 50))
                                     :vel (vec2/vec2 0 -10)
                                     :max-force 1
                                     :max-speed 10}
                                  b2 {:mass 1 :pos
                                      (vec2/sub
-                                      (vec2/vec2 (.-position.x walker)
-                                                 (.-position.y walker))
+                                      (sprite/get-pos walker)
                                       (vec2/vec2 0 0))
                                      :vel
                                      (vec2/rotate
@@ -1378,8 +1344,7 @@
                                      :max-force 1
                                      :max-speed 10}
                                  b3 {:mass 1 :pos
-                                     (vec2/vec2 (.-position.x walker)
-                                                (.-position.y walker))
+                                     (sprite/get-pos walker)
                                      :vel (vec2/rotate
                                            (vec2/vec2 0 -10)
                                            (/ Math/PI 0.25 3))
@@ -1417,16 +1382,13 @@
                                           ;; return home
                                           (when (pos? n)
                                             (recur (b/arrive b
-                                                             (vec2/vec2 (.-position.x walker)
-                                                                        (.-position.y walker))
+                                                             (sprite/get-pos walker)
                                                              50.0)
                                                    (b/arrive b2
-                                                             (vec2/vec2 (.-position.x walker)
-                                                                        (.-position.y walker))
+                                                             (sprite/get-pos walker)
                                                              50.0)
                                                    (b/arrive b3
-                                                             (vec2/vec2 (.-position.x walker)
-                                                                        (.-position.y walker))
+                                                             (sprite/get-pos walker)
                                                              50.0)
                                                    (dec n)))
                                           )
@@ -1470,16 +1432,13 @@
                                           ;; return home
                                           (when (pos? n)
                                             (recur (b/arrive b
-                                                             (vec2/vec2 (.-position.x walker)
-                                                                        (.-position.y walker))
+                                                             (sprite/get-pos walker)
                                                              50.0)
                                                    (b/arrive b2
-                                                             (vec2/vec2 (.-position.x walker)
-                                                                        (.-position.y walker))
+                                                             (sprite/get-pos walker)
                                                              50.0)
                                                    (b/arrive b3
-                                                             (vec2/vec2 (.-position.x walker)
-                                                                        (.-position.y walker))
+                                                             (sprite/get-pos walker)
                                                              50.0)
                                                    (dec n)))
                                           )
@@ -1512,12 +1471,8 @@
                                             (let [flies (:flies @game)
                                                   touching (filter
                                                             #(< (vec2/distance-squared
-                                                                 (vec2/vec2
-                                                                  (.-position.x (:sprite %))
-                                                                  (.-position.y (:sprite %)))
-                                                                 (vec2/vec2
-                                                                  (.-position.x spray)
-                                                                  (.-position.y spray)))
+                                                                 (sprite/get-pos (:sprite %))
+                                                                 (sprite/get-pos spray))
                                                                 ;; spray effective distance
                                                                 (* 40 40))
                                                             flies)]
@@ -1640,8 +1595,7 @@
                                                         (sort-by
                                                          (fn [pl] (vec2/distance-squared
                                                                    (:pos pl)
-                                                                   (vec2/vec2 (.-position.x walker)
-                                                                              (.-position.y walker))))
+                                                                   (sprite/get-pos walker)))
                                                          (:plants @game))))]
 
                                           ;; user clicked chop
@@ -1678,16 +1632,13 @@
                                           ;; return home
                                           (when (pos? n)
                                             (recur (b/arrive b
-                                                             (vec2/vec2 (.-position.x walker)
-                                                                        (.-position.y walker))
+                                                             (sprite/get-pos walker)
                                                              50.0)
                                                    (b/arrive b2
-                                                             (vec2/vec2 (.-position.x walker)
-                                                                        (.-position.y walker))
+                                                             (sprite/get-pos walker)
                                                              50.0)
                                                    (b/arrive b3
-                                                             (vec2/vec2 (.-position.x walker)
-                                                                        (.-position.y walker))
+                                                             (sprite/get-pos walker)
                                                              50.0)
                                                    (dec n)))
                                           )
@@ -1712,16 +1663,13 @@
                                         ;; return home
                                         (when (pos? n)
                                           (recur (b/arrive b
-                                                           (vec2/vec2 (.-position.x walker)
-                                                                      (.-position.y walker))
+                                                           (sprite/get-pos walker)
                                                            50.0)
                                                  (b/arrive b2
-                                                           (vec2/vec2 (.-position.x walker)
-                                                                      (.-position.y walker))
+                                                           (sprite/get-pos walker)
                                                            50.0)
                                                  (b/arrive b3
-                                                           (vec2/vec2 (.-position.x walker)
-                                                                      (.-position.y walker))
+                                                           (sprite/get-pos walker)
                                                            50.0)
                                                  (dec n)))
                                         )
@@ -1730,20 +1678,17 @@
                                   ;; no button is clicked.
                                   (recur (b/arrive b
                                                    (vec2/sub
-                                                    (vec2/vec2 (.-position.x walker)
-                                                               (.-position.y walker))
+                                                    (sprite/get-pos walker)
                                                     (vec2/vec2 0 100)) 50.0)
                                          (b/arrive b2
                                                    (vec2/sub
-                                                    (vec2/vec2 (.-position.x walker)
-                                                               (- (.-position.y walker) 0))
+                                                    (sprite/get-pos walker)
                                                     (vec2/rotate
                                                      (vec2/vec2 0 70)
                                                      (/ Math/PI 0.5 3))) 50.0)
                                          (b/arrive b3
                                                    (vec2/sub
-                                                    (vec2/vec2 (.-position.x walker)
-                                                               (- (.-position.y walker) 0))
+                                                    (sprite/get-pos walker)
                                                     (vec2/rotate
                                                      (vec2/vec2 0 70)
                                                      (/ Math/PI 0.25 3))) 50.0)
@@ -1764,16 +1709,13 @@
                                     ;; return home
                                     (when (pos? n)
                                       (recur (b/arrive b
-                                                       (vec2/vec2 (.-position.x walker)
-                                                                  (.-position.y walker))
+                                                       (sprite/get-pos walker)
                                                        50.0)
                                              (b/arrive b2
-                                                       (vec2/vec2 (.-position.x walker)
-                                                                  (.-position.y walker))
+                                                       (sprite/get-pos walker)
                                                        50.0)
                                              (b/arrive b3
-                                                       (vec2/vec2 (.-position.x walker)
-                                                                  (.-position.y walker))
+                                                       (sprite/get-pos walker)
                                                        50.0)
                                              (dec n)))
                                     )))
