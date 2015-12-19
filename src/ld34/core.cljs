@@ -493,12 +493,10 @@
                              (if (-> boid :pos
                                      (vec2/distance-squared dest)
                                      (> 20))
-                               (do
-                                 ;(log "distance-sqaured longer")
-                                 (recur
-                                  (b/arrive boid
-                                            dest
-                                            20)))
+                               (recur
+                                (b/arrive boid
+                                          dest
+                                          20))
 
                                (do
                                  ;; smoke mode
