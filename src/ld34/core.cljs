@@ -15,6 +15,7 @@
               [ld34.assets :as a]
               [ld34.shaders :as shaders]
               [ld34.boid :as b]
+              [ld34.flies :as flies]
               [ld34.effects :as effects]
               [cljs.core.async :refer [<! chan put!]]
               [PIXI])
@@ -241,15 +242,7 @@
                                          :xhandle 0.5
                                          :yhandle 1.0)})
 
-          new-flies
-          (fn [pos]
-            {:pos pos
-             :sprite (sprite/make-sprite (:flies-1 assets)
-                                         :x (vec2/get-x pos)
-                                         :y (vec2/get-y pos)
-                                         :scale scale-2
-                                         :xhandle 0.5
-                                         :yhandle 1.0)})
+          new-flies (partial flies/make assets)
 
           new-hippy
           (fn [pos]
