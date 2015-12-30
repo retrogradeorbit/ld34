@@ -16,11 +16,13 @@
               [ld34.shaders :as shaders]
               [ld34.boid :as b]
               [ld34.flies :as flies]
+              [ld34.tree :as tree]
+              [ld34.hippy :as hippy]
               [ld34.effects :as effects]
               [cljs.core.async :refer [<! chan put!]]
               [PIXI])
     (:require-macros [cljs.core.async.macros :refer [go]]
-                     [ld34.macros :as m]
+                     [infinitelives.pixi.macros :as m]
                      ))
 
 (enable-console-print!)
@@ -165,7 +167,7 @@
                           (texture/sub-texture sheet pos size)
                           ]))
           scale 3.0
-          scale-2 [(* 2 scale) (* 2 scale)]
+          scale-2 (* 2 scale)
 
           set-pos-relative!
           (fn [spr corner space]
@@ -174,11 +176,7 @@
               (case corner
                 :top-left
                 (do (sprite/set-anchor! spr 0 0)
-                    (sprite/set-pos! spr (- space h-width) (- space h-height)))
-                )
-              )
-
-            )
+                    (sprite/set-pos! spr (- space h-width) (- space h-height))))))
 
           seed-text (font/make-text "500 12px Share Tech Mono"
                                     ""
@@ -329,315 +327,16 @@
 
             })
 
-
-          texture-cycle
-          (fn [texture-list frame frame-length]
-            (let [total-frames (count texture-list)]
-              (texture-list
-               (mod
-                (int (/ frame frame-length))
-                total-frames))))
-
           update-seeds
           (fn []
             (let [state (-> @game :seeds)]
               nil
               ))
 
-          update-flies
-          (fn
-            [flies]
-            (doall (for [fly flies]
-                     (sprite/set-texture!
-                      (:sprite fly)
-                      (texture-cycle [(:flies-1 assets)
-                                      (:flies-2 assets)
-                                      (:flies-3 assets)
-                                      (:flies-4 assets)]
-                                     (:frame @game)
-                                     5))))
-            (into #{} flies))
-
-          ;; run each frame, animate the chopping tree
-          update-tree-chop
-          (fn []
-            (when (-> @game :walker :chopping)
-              (let [frame (-> @game :walker :action-count)
-                    plant (-> @game :walker :chopping)
-                    [x y] (sprite/get-xy (:sprite plant))
-                    left-right (= 0 (mod (int (/ frame 5)) 2))
-                    intensity (mod (/ frame 30) 4)]
-                (if left-right
-                  (sprite/set-pos! (:sprite plant) (+ x intensity) y)
-                  (sprite/set-pos! (:sprite plant) (- x intensity) y)))))
-
-          chop-tree-go-thread
-          (fn [{:keys [pos sprite id yield] :as tree}]
-            (go
-                                        ;(log "CHOP_TREE" sprite pos tree)
-              (loop [chop-num 0]
-
-                (if (> chop-num (:chop-num @game))
-                  ;; tree chopped down
-                  (do
-                    (sound/play-sound sfx-tree-harvest  0.5 false)
-                    (.removeChild (-> canvas :layer :world) sprite)
-
-                    (swap! game
-                           #(-> %
-                                (assoc-in [:walker :action] :walk)
-                                (update :plants disj (first (filter
-                                                             (fn [pl]
-                                                               (= (:sprite pl) sprite))
-                                                             (:plants @game))))
-                                (update :dollars + (* yield (:plant-multiplier %)))
-                                (update :seeds + (:max-seeds %))))
-                    (set-seed-text (:seeds @game) (:dollars @game)))
-
-
-                  (do
-
-                    (sprite/set-pos! sprite pos)
-                    (<! (events/wait-time 30))
-
-                    (if (= :walk (-> @game :walker :action))
-                      ;; exit
-                      nil
-
-
-                      (do
-
-                        ;; shake
-                        (sound/play-sound sfx-tree-chop 0.5 false)
-
-                        (loop [f 0]
-                          (when (< f (:chop-length @game))
-                                        ;(log "shake" (effects/shake 10 2 0.07 f))
-                            (sprite/set-pos! sprite (+
-                                                     (vec2/get-x pos)
-                                                     (effects/shake 10 2 0.07 f))
-                                             (vec2/get-y pos))
-                            (<! (events/next-frame))
-                            (recur (inc f))
-                            )
-
-                          )
-                        (recur (inc chop-num)))))))))
-
-          hippy-go-thread
-          (fn [{:keys [pos sprite] :as hippy}]
-            (go
-              (sprite/set-pos! sprite pos)
-
-              (loop [boid {:mass 5
-                           :pos (sprite/get-pos sprite)
-                           :vel (vec2/zero)
-                           :max-force 0.1
-                           :max-speed 0.5}]
-
-                ;; hippy wander
-                (let [action (rand-nth [:wander :wander
-                                        :pause :pause :pause
-                                        :hunt
-                                        :hone
-                                        :attach :attach :attach
-                                        ])]
-                  ;(log "Action:" (str action))
-                  (case action
-                    :pause
-                    (recur
-                     (loop [n 100
-                            boid boid]
-                       (sprite/set-pos! sprite (:pos boid))
-                       (<! (events/next-frame))
-
-                       (if (pos? n)
-                         (recur (dec n) boid)
-                         boid)))
-
-                    :attach
-                    (recur
-                     (let [closest (first
-                                    (filter
-                                     #(> (:age %) 5)
-                                     (sort-by
-                                      #(vec2/distance-squared
-                                        (:pos %)
-                                        (sprite/get-pos sprite))
-                                      (:plants @game))))]
-                       ;(log "closest" closest)
-                       (if (not closest)
-                         boid
-                         (let [dest (vec2/add
-                                     (:pos closest)
-                                     (vec2/scale
-                                      (vec2/random-unit)
-                                      50))]
-                           (loop [
-                                  boid boid]
-                             (if (pos? (vec2/get-x (:vel boid)))
-                               (sprite/set-texture! sprite (:hippy-right assets))
-                               (sprite/set-texture! sprite (:hippy-left assets)))
-                                        ;(log n (:pos boid))
-                             (sprite/set-pos! sprite (:pos boid))
-                             (<! (events/next-frame))
-
-                             (if (-> boid :pos
-                                     (vec2/distance-squared dest)
-                                     (> 20))
-                               (recur (b/arrive boid dest 20))
-
-                               (do
-                                 ;; smoke mode
-
-                                 ;; turn to face tree
-                                 (let [dir (vec2/direction dest (:pos closest))
-                                       right? (pos? (vec2/get-x dir))]
-                                   (if right?
-                                     (sprite/set-texture! sprite (:hippy-right-smoke assets))
-                                     (sprite/set-texture! sprite (:hippy-left-smoke assets)))
-
-                                   (m/with-sprite canvas :world
-                                     [smoke (sprite/make-sprite
-                                             (:smoke-1 assets)
-                                             :x (sprite/get-x e)
-                                             :y (- (sprite/get-y e) 0)
-                                             :scale [scale scale]
-                                             :xhandle 0.5
-                                             :yhandle 3.0)]
-                                     (loop [n 0]
-                                       (sprite/set-texture! smoke
-                                                            ((nth [:smoke-1 :smoke-2
-                                                                   :smoke-3 :smoke-4]
-                                                                  (mod (int n) 4))
-                                                             assets))
-                                       (<! (events/wait-time 100))
-                                       (<! (events/next-frame))
-                                       (if
-                                           (and
-                                            (pos? (mod n 50))
-                                            (> (:age closest) 4)
-                                            (some #(= (:id %) (:id closest))
-                                                  (:plants @game))
-                                            )
-                                         ;; exit
-                                         boid
-
-                                         ;; negative
-                                         (do
-
-                                           ;(log "-" (count (:plants @game)) "id:" (:id closest) "closest:" closest "plants:" (str (:plants @game)))
-                                           ;(log "new" (str (update closest :yield - 10)))
-                                           (let [old-plant (first (filter
-                                                                   #(= (:id closest) (:id %))
-                                                                   (:plants @game)))
-
-                                                 plants (disj (:plants @game) old-plant)]
-                                             ;(log "--" old-plant (count plants))
-                                             (when old-plant
-                                               (swap! game
-                                                      assoc :plants
-                                                      (conj plants (update old-plant :yield
-                                                                           (fn [y] (max 10 (- y 10)))))
-                                                      )))
-                                           ;(log "+" (count (:plants @game)))
-                                           ;(log "plants:" (str (:plants @game)))
-                                           (go
-                                             (m/with-sprite canvas :float
-                                               [minus (sprite/make-sprite
-                                                       (:minus assets)
-                                                       :x (sprite/get-x (:sprite closest))
-                                                       :y (- (sprite/get-y (:sprite closest)) 50)
-                                                       :scale scale-2
-                                                       :xhandle 0.5
-                                                       :yhandle 0.5)]
-                                               (loop [n 100
-                                                      y (- (sprite/get-y (:sprite closest)) 50)]
-                                                 (sprite/set-pos! minus (sprite/get-x (:sprite closest)) y)
-                                                 (sprite/set-alpha! minus (/ n 100))
-                                                 (<! (events/next-frame))
-                                                 (when (pos? n)
-                                                   (recur (dec n) (- y 2))
-                                                   )
-                                                 )
-                                               ))))
-
-                                       (if
-                                           (and
-
-                                            (> (:age closest) 4)
-                                            (some #(= (:id %) (:id closest))
-                                                  (:plants @game))
-                                            )
-                                         (recur (inc n))
-                                         boid))))
-
-
-                                 boid)))))))
-
-                    :hone
-                    (recur
-                     (let [closest (first
-                                    (filter
-                                     #(> (:age %) 2)
-                                     (sort-by
-                                      #(vec2/distance-squared
-                                        (:pos %)
-                                        (sprite/get-pos sprite))
-                                      (:plants @game))))]
-                       (if (not closest)
-                         boid
-                         (loop [n 400
-                                boid boid]
-                           (if (pos? (vec2/get-x (:vel boid)))
-                             (sprite/set-texture! sprite (:hippy-right assets))
-                             (sprite/set-texture! sprite (:hippy-left assets)))
-                                        ;(log n (:pos boid))
-                           (sprite/set-pos! sprite (:pos boid))
-                           (<! (events/next-frame))
-
-                           (if (pos? n)
-                             (recur (dec n)
-                                    (b/arrive boid
-                                              (:pos closest)
-                                              20))
-                             boid)))))
-
-                    :hunt
-                    (recur
-                     (loop [n 400
-                            boid boid]
-                       (if (pos? (vec2/get-x (:vel boid)))
-                         (sprite/set-texture! sprite (:hippy-right assets))
-                         (sprite/set-texture! sprite (:hippy-left assets)))
-                                        ;(log n (:pos boid))
-                       (sprite/set-pos! sprite (:pos boid))
-                       (<! (events/next-frame))
-
-                       (if (pos? n)
-                         (recur (dec n)
-                                (b/arrive boid
-                                          (vec2/zero)
-                                          200))
-                         boid)))
-
-                    :wander
-                    (recur
-                     (loop [n 300
-                            boid boid]
-                                        ;(log "wander" (:pos b))
-                       (if (pos? (vec2/get-x (:vel boid)))
-                         (sprite/set-texture! sprite (:hippy-right assets))
-                         (sprite/set-texture! sprite (:hippy-left assets)))
-                       (sprite/set-pos! sprite (:pos boid))
-                       (<! (events/next-frame))
-
-                       (if (pos? n)
-                         (recur
-                          (dec n)
-                          (b/wander boid 40 10 3))
-                         boid
-                         ))))))))
+          update-flies (partial flies/update game)
+          update-tree-chop (partial tree/update-chop game)
+          chop-tree-go-thread (partial tree/chop-tree-go-thread game)
+          hippy-go-thread (partial hippy/hippy-go-thread game)
 
           ;; TODO: exit this thread on death
           fly-go-thread
@@ -648,8 +347,6 @@
               (loop []
                 ;; wait for a random time before looking for target (lower cpu)
                 (<! (events/wait-time (math/rand-between 1000 4000)))
-
-                ;(log "FLY RETARGET:" (str (:plants @game)))
 
                 (let [closest-plant
                       (first
