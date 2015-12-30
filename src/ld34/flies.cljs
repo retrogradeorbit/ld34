@@ -15,3 +15,14 @@
                                :scale 6
                                :xhandle 0.5
                                :yhandle 1.0)})
+(defn update [game flies]
+  (doall (for [fly flies]
+           (sprite/set-texture!
+            (:sprite fly)
+            (texture-cycle [(:flies-1 assets)
+                            (:flies-2 assets)
+                            (:flies-3 assets)
+                            (:flies-4 assets)]
+                           (:frame @game)
+                           5))))
+  (into #{} flies))
