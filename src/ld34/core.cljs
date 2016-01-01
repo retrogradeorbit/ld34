@@ -335,7 +335,7 @@
 
           update-flies (partial flies/update game)
           update-tree-chop (partial tree/update-chop game)
-          chop-tree-go-thread (partial tree/chop-tree-go-thread game)
+          chop-tree-go-thread (partial tree/chop-tree-go-thread game canvas)
           hippy-go-thread (partial hippy/hippy-go-thread game)
 
           ;; TODO: exit this thread on death
@@ -436,7 +436,7 @@
            ;(log "ADDING HIPPY" (:sprite hippy))
            (.addChild (-> canvas :layer :world) (:sprite hippy))
            ;(log "go thread")
-           (hippy-go-thread hippy))))
+           (hippy-go-thread game canvas assets hippy))))
 
 
 
@@ -1265,7 +1265,7 @@
                                                          (:plants @game))))]
 
                                           ;; user clicked chop
-                                          (chop-tree-go-thread closest)
+                                          (chop-tree-go-thread closest set-seed-text)
 
                                           (swap! game
                                                  #(->
