@@ -1,4 +1,7 @@
-(ns ld34.flies)
+(ns ld34.flies
+  (:require [infinitelives.pixi.sprite :as sprite]
+            [infinitelives.utils.vec2 :as vec2])
+  )
 
 (defn- texture-cycle [texture-list frame frame-length]
   (let [total-frames (count texture-list)]
@@ -15,7 +18,7 @@
                                :scale 6
                                :xhandle 0.5
                                :yhandle 1.0)})
-(defn update [game flies]
+(defn update [game assets flies]
   (doall (for [fly flies]
            (sprite/set-texture!
             (:sprite fly)
