@@ -1,6 +1,13 @@
-(ns ld34.hippy)
+(ns ld34.hippy
+  (:require [infinitelives.utils.events :as events]
+            [infinitelives.utils.vec2 :as vec2]
+            [infinitelives.pixi.sprite :as sprite]
+            [ld34.boid :as b])
+  (:require-macros [cljs.core.async.macros :refer [go]]
+                   [infinitelives.pixi.macros :as m])
+)
 
-(defn hippy-go-thread [game {:keys [pos sprite] :as hippy}]
+(defn hippy-go-thread [game canvas assets {:keys [pos sprite] :as hippy}]
   (go
     (sprite/set-pos! sprite pos)
 
@@ -72,9 +79,9 @@
                          (m/with-sprite canvas :world
                            [smoke (sprite/make-sprite
                                    (:smoke-1 assets)
-                                   :x (sprite/get-x e)
-                                   :y (- (sprite/get-y e) 0)
-                                   :scale [scale scale]
+                                   :x (sprite/get-x sprite)
+                                   :y (- (sprite/get-y sprite) 0)
+                                   :scale 3
                                    :xhandle 0.5
                                    :yhandle 3.0)]
                            (loop [n 0]
@@ -114,7 +121,7 @@
                                              (:minus assets)
                                              :x (sprite/get-x (:sprite closest))
                                              :y (- (sprite/get-y (:sprite closest)) 50)
-                                             :scale scale-2
+                                             :scale 6
                                              :xhandle 0.5
                                              :yhandle 0.5)]
                                      (loop [n 100
