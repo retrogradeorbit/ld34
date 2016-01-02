@@ -21,7 +21,7 @@
               [ld34.tree :as tree]
               [ld34.hippy :as hippy]
               [ld34.effects :as effects]
-              [cljs.core.async :refer [<! chan put!]]
+              [cljs.core.async :refer [<! chan put! alts!]]
               [PIXI])
     (:require-macros [cljs.core.async.macros :refer [go]]
                      [infinitelives.pixi.macros :as m]
