@@ -91,87 +91,73 @@
            (assoc-in [:walker :buttons] false))))
 
 (defn buttons-open [button-man button-faster button-seed]
-  (loop [boid-man (button-boid caravan 50 0)
-         boid-faster (button-boid caravan 0 (/ Math/PI 0.5 3))
-         boid-seed (button-boid caravan 0 (/ Math/PI 0.25 3))]
-    (sprite/set-pos! button-man (:pos boid-man))
-    (sprite/set-pos! button-faster (:pos boid-faster))
-    (sprite/set-pos! button-seed (:pos boid-seed))
+  (go
+    (loop [boid-man (button-boid caravan 50 0)
+           boid-faster (button-boid caravan 0 (/ Math/PI 0.5 3))
+           boid-seed (button-boid caravan 0 (/ Math/PI 0.25 3))]
+      (sprite/set-pos! button-man (:pos boid-man))
+      (sprite/set-pos! button-faster (:pos boid-faster))
+      (sprite/set-pos! button-seed (:pos boid-seed))
 
-    ;; keep 'arriving' while buttons is still true
-    (if (-> @game :caravan :buttons)
-      ;; buttons is still true
-      (let [[v c] (alts! #js [(events/next-frame) click-chan])]
-        (if (= c click-chan)
-          (case v
-            :man
-            ;; the man button was clicked! exit and reset
-            (if (>= money (-> @game :levels :man :cost))
-              (do
-                ;; man button is active with available money
-                (sound/play-sound :button-select 0.7 false)
+      ;; keep 'arriving' while buttons is still true
+      (if (-> @game :caravan :buttons)
+        ;; buttons is still true
+        (let [[v c] (alts! #js [(events/next-frame) click-chan])]
+          (if (= c click-chan)
+            (case v
+              :man
+              (if (>= money (-> @game :levels :man :cost))
+                (do
+                  (sound/play-sound :button-select 0.7 false)
+                  (<! (grow-and-fade button-man))
+                  (activate! game :man))
 
-                ;; grow and fade
-                (<! (grow-and-fade button-man))
+                ;; man button inactive and clicked
+                (<! (close-buttons)))
 
-                ;; user clicked MAN
-                (activate! game :man))
-
-              ;; man button inactive and clicked
-              (<! (close-buttons)))
-
-            ;; select "faster"
-            :faster
-            (if (>= money (-> @game :levels :faster :cost))
-              (do (sound/play-sound :button-select 0.7 false)
-
-                  ;; grow and fade
+              :faster
+              (if (>= money (-> @game :levels :faster :cost))
+                (do
+                  (sound/play-sound :button-select 0.7 false)
                   (<! (grow-and-fade button-faster))
-
-                  ;; user clicked FASTER
                   (activate! game :faster))
 
-              ;; no money for faster
-              (<! (close-buttons)))
+                ;; no money for faster
+                (<! (close-buttons)))
 
-            ;; select "chopped"
-            :seed
-            (if (>= money (-> @game :levels :seed :cost))
-              (do (sound/play-sound :button-select 0.7 false)
-
-                  ;; grow and fade
+              :seed
+              (if (>= money (-> @game :levels :seed :cost))
+                (do
+                  (sound/play-sound :button-select 0.7 false)
                   (<! (grow-and-fade button-seed))
+                  (activate! game :seed))
 
-                  ;; user clicked SEED
-                  (activate! game :seed)
-                  )
+                ;; not enough money
+                (<! (close-buttons)))
 
-              ;; not enough money
+              ;; unknown button clicked
               (<! (close-buttons)))
 
-            ;; unknown button clicked
-            (<! (close-buttons)))
+            ;; no button is clicked.
+            (recur (b/arrive b
+                             (vec2/sub
+                              (sprite/get-pos caravan 20 -40)
+                              (vec2/vec2 0 100)) 50.0)
+                   (b/arrive b2
+                             (vec2/sub
+                              (sprite/get-pos caravan 20 -40)
+                              (vec2/rotate
+                               (vec2/vec2 0 70)
+                               (/ Math/PI 0.5 3))) 50.0)
+                   (b/arrive b3
+                             (vec2/sub
+                              (sprite/get-pos caravan 20 -40)
+                              (vec2/rotate
+                               (vec2/vec2 0 70)
+                               (/ Math/PI 0.25 3))) 50.0))))
 
-          ;; no button is clicked.
-          (recur (b/arrive b
-                           (vec2/sub
-                            (sprite/get-pos caravan 20 -40)
-                            (vec2/vec2 0 100)) 50.0)
-                 (b/arrive b2
-                           (vec2/sub
-                            (sprite/get-pos caravan 20 -40)
-                            (vec2/rotate
-                             (vec2/vec2 0 70)
-                             (/ Math/PI 0.5 3))) 50.0)
-                 (b/arrive b3
-                           (vec2/sub
-                            (sprite/get-pos caravan 20 -40)
-                            (vec2/rotate
-                             (vec2/vec2 0 70)
-                             (/ Math/PI 0.25 3))) 50.0))))
-
-      ;; buttons has turned false
-      (<! (close-buttons)))))
+        ;; buttons has turned false
+        (<! (close-buttons))))))
 
 
 (defn appear []
