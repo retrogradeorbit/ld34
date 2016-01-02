@@ -61,7 +61,7 @@
     (sound/play-sound :button-close 0.5 false)
     (swap! game
            #(-> %
-                (update-in [:caravan :buttons] not)
+                (assoc-in [:caravan :buttons] false)
                 (assoc-in [:walker :buttons] false)))
 
     (loop [b1 boid1
@@ -95,7 +95,7 @@
          #(->
            %
            ((-> % :levels type :activate))
-           (update-in [:caravan :buttons] not)
+           (assoc-in [:caravan :buttons] true)
            (assoc-in [:walker :buttons] false))))
 
 (defn buttons-open [game money click-chan caravan button-man button-faster button-seed]
@@ -169,29 +169,30 @@
 
 
 (defn appear [assets click-chan canvas game caravan]
-  (m/with-sprite canvas :float
-    [button (sprite/make-sprite
-             (:button-man assets)
-             :scale scale-2
-             :interactive true
-             :mousedown #(put! click-chan :man))
-     button-faster (sprite/make-sprite
-                    (:button-faster assets)
+  (go
+    (m/with-sprite canvas :float
+      [button (sprite/make-sprite
+               (:button-man assets)
+               :scale scale-2
+               :interactive true
+               :mousedown #(put! click-chan :man))
+       button-faster (sprite/make-sprite
+                      (:button-faster assets)
+                      :scale scale-2
+                      :interactive true
+                      :mousedown #(put! click-chan :faster))
+       button-seed (sprite/make-sprite
+                    (:button-seed assets)
                     :scale scale-2
                     :interactive true
-                    :mousedown #(put! click-chan :faster))
-     button-seed (sprite/make-sprite
-                  (:button-seed assets)
-                  :scale scale-2
-                  :interactive true
-                  :mousedown #(put! click-chan :seed))]
+                    :mousedown #(put! click-chan :seed))]
 
-    ;; turn buttons on and off depending on cost
-    (let [money (:dollars @game)]
-      (button-enable-disable game money button button-faster button-seed)
+      ;; turn buttons on and off depending on cost
+      (let [money (:dollars @game)]
+        (button-enable-disable game money button button-faster button-seed)
 
-      ;; move button out and up
-      (<! (buttons-open game money click-chan caravan button button-faster button-seed)))))
+        ;; move button out and up
+        (<! (buttons-open game money click-chan caravan button button-faster button-seed))))))
 
 ;; 'thread' to handle buttons on caravan
 (defn button-thread [game canvas caravan assets click-chan]
@@ -213,6 +214,6 @@
         (sound/play-sound :button-open 0.5 false)
 
         ;; appear
-        (appear assets click-chan canvas game caravan))
+        (<! (appear assets click-chan canvas game caravan)))
 
       (recur))))
