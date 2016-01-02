@@ -48,7 +48,7 @@
         (<! (events/next-frame))
         (recur (dec n))))))
 
-(defn close-buttons [game but1 but2 but3]
+(defn close-buttons [game but1 but2 but3 boid1 boid2 boid3]
   (go
     (sound/play-sound :button-close 0.5 false)
     (swap! game
@@ -56,9 +56,9 @@
                 (update-in [:caravan :buttons] not)
                 (assoc-in [:walker :buttons] false)))
 
-    (loop [b1 b1
-           b2 b2
-           b3 b3
+    (loop [b1 boid1
+           b2 boid2
+           b3 boid3
            n 10]
       (sprite/set-pos! but1 (:pos b1))
       (sprite/set-pos! but2 (:pos b2))
