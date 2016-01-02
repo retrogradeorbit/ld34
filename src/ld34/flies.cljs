@@ -1,6 +1,14 @@
 (ns ld34.flies
   (:require [infinitelives.pixi.sprite :as sprite]
-            [infinitelives.utils.vec2 :as vec2])
+            [infinitelives.utils.vec2 :as vec2]
+            [infinitelives.utils.math :as math]
+            [infinitelives.utils.events :as events]
+            [infinitelives.utils.sound :as sound]
+            [ld34.boid :as b]
+            )
+  (:require-macros [cljs.core.async.macros :refer [go]]
+                   [infinitelives.pixi.macros :as m]
+                   )
   )
 
 (defn- texture-cycle [texture-list frame frame-length]
@@ -29,3 +37,57 @@
                            (:frame @game)
                            5))))
   (into #{} flies))
+
+(defn go-thread
+  [game {:keys [pos sprite] :as fly}]
+  (go
+    (sprite/set-pos! sprite pos)
+
+    (loop []
+      ;; wait for a random time before looking for target (lower cpu)
+      (<! (events/wait-time (math/rand-between 1000 4000)))
+
+      (let [closest-plant
+            (first
+             (filter
+              #(> (:age %) 2)
+              (sort-by
+               #(vec2/distance-squared
+                 (:pos %)
+                 (sprite/get-pos sprite))
+               (:plants @game))))]
+                                        ;(log "close:" closest-plant)
+        (when closest-plant
+          (when (< (vec2/distance-squared
+                    (sprite/get-pos sprite)
+                    (:pos closest-plant))
+                   (* 20 20))
+            (sound/play-sound :tree-hurt 0.3 false)
+            (swap! game update :plants
+                   #(-> %
+                        (disj closest-plant)
+                        (conj (update closest-plant :age
+                                      (fn [x] (- x (* 500 (:growth-rate @game)))))))))
+
+          (loop [b {:mass 0.5
+                    :pos (sprite/get-pos sprite)
+                    :vel (vec2/zero)
+                    :max-force 0.01
+                    :max-speed 1}]
+            (sprite/set-pos! sprite (:pos b))
+            (<! (events/next-frame))
+            (when (> (vec2/distance-squared
+                      (:pos b)
+                      (:pos closest-plant))
+                     (* 10 10))
+              (recur
+               (b/arrive b (vec2/add
+                            (vec2/vec2 0 2)
+                            (:pos closest-plant))
+                         100))))))
+
+      (when ((:flies @game) fly)
+                                        ;(log "looping:" (str fly))
+        (recur))
+      ))
+  )
