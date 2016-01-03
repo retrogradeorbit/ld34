@@ -5,6 +5,7 @@
             [infinitelives.utils.events :as events]
             [infinitelives.utils.sound :as sound]
             [ld34.boid :as b]
+            [ld34.game :as g]
             )
   (:require-macros [cljs.core.async.macros :refer [go]]
                    [infinitelives.pixi.macros :as m]
@@ -18,28 +19,28 @@
       (int (/ frame frame-length))
       total-frames))))
 
-(defn make [assets pos]
+(defn make [pos]
   {:pos pos
-   :sprite (sprite/make-sprite (:flies-1 assets)
+   :sprite (sprite/make-sprite :flies-1
                                :x (vec2/get-x pos)
                                :y (vec2/get-y pos)
                                :scale 6
                                :xhandle 0.5
                                :yhandle 1.0)})
-(defn update [game assets flies]
+(defn update-fly [flies]
   (doall (for [fly flies]
            (sprite/set-texture!
             (:sprite fly)
-            (texture-cycle [(:flies-1 assets)
-                            (:flies-2 assets)
-                            (:flies-3 assets)
-                            (:flies-4 assets)]
-                           (:frame @game)
+            (texture-cycle [:flies-1
+                            :flies-2
+                            :flies-3
+                            :flies-4 ]
+                           (:frame @g/game)
                            5))))
   (into #{} flies))
 
 (defn go-thread
-  [game {:keys [pos sprite] :as fly}]
+  [{:keys [pos sprite] :as fly}]
   (go
     (sprite/set-pos! sprite pos)
 
@@ -55,7 +56,7 @@
                #(vec2/distance-squared
                  (:pos %)
                  (sprite/get-pos sprite))
-               (:plants @game))))]
+               (:plants @g/game))))]
                                         ;(log "close:" closest-plant)
         (when closest-plant
           (when (< (vec2/distance-squared
@@ -63,11 +64,11 @@
                     (:pos closest-plant))
                    (* 20 20))
             (sound/play-sound :tree-hurt 0.3 false)
-            (swap! game update :plants
+            (swap! g/game update :plants
                    #(-> %
                         (disj closest-plant)
                         (conj (update closest-plant :age
-                                      (fn [x] (- x (* 500 (:growth-rate @game)))))))))
+                                      (fn [x] (- x (* 500 (:growth-rate @g/game)))))))))
 
           (loop [b {:mass 0.5
                     :pos (sprite/get-pos sprite)
@@ -86,8 +87,5 @@
                             (:pos closest-plant))
                          100))))))
 
-      (when ((:flies @game) fly)
-                                        ;(log "looping:" (str fly))
-        (recur))
-      ))
-  )
+      (when ((:flies @g/game) fly)
+        (recur)))))

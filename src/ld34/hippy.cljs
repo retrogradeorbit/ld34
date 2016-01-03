@@ -2,12 +2,13 @@
   (:require [infinitelives.utils.events :as events]
             [infinitelives.utils.vec2 :as vec2]
             [infinitelives.pixi.sprite :as sprite]
-            [ld34.boid :as b])
+            [ld34.boid :as b]
+            [ld34.game :as g])
   (:require-macros [cljs.core.async.macros :refer [go]]
                    [infinitelives.pixi.macros :as m])
 )
 
-(defn hippy-go-thread [game canvas assets {:keys [pos sprite] :as hippy}]
+(defn hippy-go-thread [{:keys [pos sprite] :as hippy}]
   (go
     (sprite/set-pos! sprite pos)
 
@@ -45,7 +46,7 @@
                             #(vec2/distance-squared
                               (:pos %)
                               (sprite/get-pos sprite))
-                            (:plants @game))))]
+                            (:plants @g/game))))]
              (if (not closest)
                boid
                (let [dest (vec2/add
@@ -56,8 +57,8 @@
                  (loop [
                         boid boid]
                    (if (pos? (vec2/get-x (:vel boid)))
-                     (sprite/set-texture! sprite (:hippy-right assets))
-                     (sprite/set-texture! sprite (:hippy-left assets)))
+                     (sprite/set-texture! sprite :hippy-right)
+                     (sprite/set-texture! sprite :hippy-left))
                    (sprite/set-pos! sprite (:pos boid))
                    (<! (events/next-frame))
 
@@ -73,23 +74,23 @@
                        (let [dir (vec2/direction dest (:pos closest))
                              right? (pos? (vec2/get-x dir))]
                          (if right?
-                           (sprite/set-texture! sprite (:hippy-right-smoke assets))
-                           (sprite/set-texture! sprite (:hippy-left-smoke assets)))
+                           (sprite/set-texture! sprite :hippy-right-smoke)
+                           (sprite/set-texture! sprite :hippy-left-smoke))
 
-                         (m/with-sprite canvas :world
-                           [smoke (sprite/make-sprite
-                                   (:smoke-1 assets)
-                                   :x (sprite/get-x sprite)
-                                   :y (- (sprite/get-y sprite) 0)
-                                   :scale 3
-                                   :xhandle 0.5
-                                   :yhandle 3.0)]
+                         (m/with-layered-sprite
+                           [smoke :world (sprite/make-sprite
+                                          :smoke-1
+                                          :x (sprite/get-x sprite)
+                                          :y (- (sprite/get-y sprite) 0)
+                                          :scale 3
+                                          :xhandle 0.5
+                                          :yhandle 3.0)]
                            (loop [n 0]
                              (sprite/set-texture! smoke
-                                                  ((nth [:smoke-1 :smoke-2
-                                                         :smoke-3 :smoke-4]
-                                                        (mod (int n) 4))
-                                                   assets))
+                                                  (nth [:smoke-1 :smoke-2
+                                                        :smoke-3 :smoke-4]
+                                                       (mod (int n) 4))
+                                                  )
                              (<! (events/wait-time 100))
                              (<! (events/next-frame))
                              (if
@@ -97,7 +98,7 @@
                                   (pos? (mod n 50))
                                   (> (:age closest) 4)
                                   (some #(= (:id %) (:id closest))
-                                        (:plants @game)))
+                                        (:plants @g/game)))
                                ;; exit
                                boid
 
@@ -105,25 +106,25 @@
                                (do
                                  (let [old-plant (first (filter
                                                          #(= (:id closest) (:id %))
-                                                         (:plants @game)))
+                                                         (:plants @g/game)))
 
-                                       plants (disj (:plants @game) old-plant)]
+                                       plants (disj (:plants @g/game) old-plant)]
 
                                    (when old-plant
-                                     (swap! game
+                                     (swap! g/game
                                             assoc :plants
                                             (conj plants (update old-plant :yield
                                                                  (fn [y] (max 10 (- y 10))))))))
 
                                  (go
-                                   (m/with-sprite canvas :float
-                                     [minus (sprite/make-sprite
-                                             (:minus assets)
-                                             :x (sprite/get-x (:sprite closest))
-                                             :y (- (sprite/get-y (:sprite closest)) 50)
-                                             :scale 6
-                                             :xhandle 0.5
-                                             :yhandle 0.5)]
+                                   (m/with-layered-sprite
+                                     [minus :float (sprite/make-sprite
+                                                    :minus
+                                                    :x (sprite/get-x (:sprite closest))
+                                                    :y (- (sprite/get-y (:sprite closest)) 50)
+                                                    :scale 6
+                                                    :xhandle 0.5
+                                                    :yhandle 0.5)]
                                      (loop [n 100
                                             y (- (sprite/get-y (:sprite closest)) 50)]
                                        (sprite/set-pos! minus (sprite/get-x (:sprite closest)) y)
@@ -137,7 +138,7 @@
 
                                   (> (:age closest) 4)
                                   (some #(= (:id %) (:id closest))
-                                        (:plants @game)))
+                                        (:plants @g/game)))
                                (recur (inc n))
                                boid))))
                        boid)))))))
@@ -151,14 +152,14 @@
                             #(vec2/distance-squared
                               (:pos %)
                               (sprite/get-pos sprite))
-                            (:plants @game))))]
+                            (:plants @g/game))))]
              (if (not closest)
                boid
                (loop [n 400
                       boid boid]
                  (if (pos? (vec2/get-x (:vel boid)))
-                   (sprite/set-texture! sprite (:hippy-right assets))
-                   (sprite/set-texture! sprite (:hippy-left assets)))
+                   (sprite/set-texture! sprite :hippy-right )
+                   (sprite/set-texture! sprite :hippy-left ))
                  (sprite/set-pos! sprite (:pos boid))
                  (<! (events/next-frame))
 
@@ -174,8 +175,8 @@
            (loop [n 400
                   boid boid]
              (if (pos? (vec2/get-x (:vel boid)))
-               (sprite/set-texture! sprite (:hippy-right assets))
-               (sprite/set-texture! sprite (:hippy-left assets)))
+               (sprite/set-texture! sprite :hippy-right)
+               (sprite/set-texture! sprite :hippy-left))
              (sprite/set-pos! sprite (:pos boid))
              (<! (events/next-frame))
 
@@ -191,8 +192,8 @@
            (loop [n 300
                   boid boid]
              (if (pos? (vec2/get-x (:vel boid)))
-               (sprite/set-texture! sprite (:hippy-right assets))
-               (sprite/set-texture! sprite (:hippy-left assets)))
+               (sprite/set-texture! sprite :hippy-right)
+               (sprite/set-texture! sprite :hippy-left))
              (sprite/set-pos! sprite (:pos boid))
              (<! (events/next-frame))
 

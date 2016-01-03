@@ -167,24 +167,24 @@
         (<! (close-buttons caravan button-man button-faster button-seed boid-man boid-faster boid-seed))))))
 
 
-(defn appear [assets click-chan canvas caravan]
+(defn appear [click-chan caravan]
   (go
-    (m/with-sprite canvas :float
-      [button (sprite/make-sprite
-               (:button-man assets)
-               :scale scale-2
-               :interactive true
-               :mousedown #(put! click-chan :man))
-       button-faster (sprite/make-sprite
-                      (:button-faster assets)
+    (m/with-layered-sprite
+      [button :float (sprite/make-sprite
+                      :button-man
                       :scale scale-2
                       :interactive true
-                      :mousedown #(put! click-chan :faster))
-       button-seed (sprite/make-sprite
-                    (:button-seed assets)
-                    :scale scale-2
-                    :interactive true
-                    :mousedown #(put! click-chan :seed))]
+                      :mousedown #(put! click-chan :man))
+       button-faster :float (sprite/make-sprite
+                             :button-faster
+                             :scale scale-2
+                             :interactive true
+                             :mousedown #(put! click-chan :faster))
+       button-seed :float (sprite/make-sprite
+                           :button-seed
+                           :scale scale-2
+                           :interactive true
+                           :mousedown #(put! click-chan :seed))]
 
       ;; turn buttons on and off depending on cost
       (let [money (:dollars @g/game)]
@@ -194,7 +194,7 @@
         (<! (buttons-open money click-chan caravan button button-faster button-seed))))))
 
 ;; 'thread' to handle buttons on caravan
-(defn button-thread [canvas caravan assets click-chan]
+(defn button-thread [caravan click-chan]
   (go
     (set! (.-interactive caravan) true)
     (set! (.-mousedown caravan)
@@ -213,6 +213,6 @@
         (sound/play-sound :button-open 0.5 false)
 
         ;; appear
-        (<! (appear assets click-chan canvas caravan)))
+        (<! (appear click-chan caravan)))
 
       (recur))))

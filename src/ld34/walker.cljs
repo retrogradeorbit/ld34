@@ -186,24 +186,24 @@
         (<! (close-buttons caravan button-plant button-chop button-spray boid-plant boid-chop boid-spray))))))
 
 
-(defn appear [assets click-chan canvas walker]
+(defn appear [click-chan walker]
   (go
-    (m/with-sprite canvas :float
-      [button-plant (sprite/make-sprite
-               (:button-grow assets)
-               :scale scale-2
-               :interactive true
-               :mousedown #(put! click-chan :plant))
-       button-chop (sprite/make-sprite
-                      (:button-chop assets)
-                      :scale scale-2
-                      :interactive true
-                      :mousedown #(put! click-chan :chop))
-       button-spray (sprite/make-sprite
-                    (:button-spray assets)
-                    :scale scale-2
-                    :interactive true
-                    :mousedown #(put! click-chan :spray))]
+    (m/with-layered-sprite
+      [button-plant :float (sprite/make-sprite
+                            :button-grow
+                            :scale scale-2
+                            :interactive true
+                            :mousedown #(put! click-chan :plant))
+       button-chop :float (sprite/make-sprite
+                           :button-chop
+                           :scale scale-2
+                           :interactive true
+                           :mousedown #(put! click-chan :chop))
+       button-spray :float (sprite/make-sprite
+                            :button-spray
+                            :scale scale-2
+                            :interactive true
+                            :mousedown #(put! click-chan :spray))]
 
       ;; turn buttons on and off depending on cost
       (let [money (:dollars @g/game)]
@@ -213,7 +213,7 @@
         (<! (buttons-open money click-chan walker button-plant button-chop button-spray))))))
 
 ;; 'thread' to handle buttons on caravan
-(defn button-thread [canvas walker assets click-chan]
+(defn button-thread [walker click-chan]
   (go
     (set! (.-interactive walker) true)
     (set! (.-mousedown walker)
@@ -232,6 +232,6 @@
         (sound/play-sound :button-open 0.5 false)
 
         ;; appear
-        (<! (appear assets click-chan canvas walker)))
+        (<! (appear click-chan walker)))
 
       (recur))))
