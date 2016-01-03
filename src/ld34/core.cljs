@@ -148,9 +148,7 @@
     ;;
     ;; play music on a loop
     ;;
-
-    (go (let [tune (<! (sound/load-sound "/sfx/music.ogg"))
-              [source gain] (sound/play-sound tune 0.7 true)]))
+    (sound/play-sound :music 0.7 true)
 
     (let [sheet (resources/get-texture :sprites :nearest)
           _ (texture/load-sprite-sheet! sheet a/assets)
