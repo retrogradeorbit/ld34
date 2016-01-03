@@ -5,6 +5,7 @@
             [infinitelives.utils.events :as events]
             [infinitelives.utils.sound :as sound]
             [ld34.boid :as b]
+            [ld34.game :as g]
             [ld34.effects :as effects]
             [cljs.core.async :refer [<! chan put! alts!]])
   (:require-macros [cljs.core.async.macros :refer [go]]
@@ -31,13 +32,13 @@
               (vec2/vec2 0 -10)
               angle)))
 
-(defn button-enable-disable [game walker button button-chop button-spray]
+(defn button-enable-disable [walker button button-chop button-spray]
   (sprite/set-alpha! button
-                     (if (zero? (-> @game :seeds))
+                     (if (zero? (-> @g/game :seeds))
                        alpha-off alpha-on))
 
   (sprite/set-alpha! button-spray
-                     (if (< (-> @game :dollars) 100)
+                     (if (< (-> @g/game :dollars) 100)
                        alpha-off alpha-on))
 
   (let [closest-plant (first
@@ -47,7 +48,7 @@
                          #(vec2/distance-squared
                            (:pos %)
                            (sprite/get-pos walker))
-                         (:plants @game))))]
+                         (:plants @g/game))))]
     (if closest-plant
       (let [distance (vec2/distance
                       (:pos closest-plant)
@@ -67,10 +68,10 @@
         (<! (events/next-frame))
         (recur (dec n))))))
 
-(defn close-buttons [game caravan but1 but2 but3 boid1 boid2 boid3]
+(defn close-buttons [caravan but1 but2 but3 boid1 boid2 boid3]
   (go
     (sound/play-sound :button-close 0.5 false)
-    (swap! game
+    (swap! g/game
            #(-> %
                 (assoc-in [:walker :buttons] false)
                 (assoc-in [:caravan :buttons] false)))
@@ -101,15 +102,15 @@
           50.0)
          (dec n))))))
 
-(defn activate! [game type]
-  (swap! game
+(defn activate! [type]
+  (swap! g/game
          #(->
            %
            ((-> % :levels type :activate))
            (assoc-in [:walker :buttons] true)
            (assoc-in [:caravan :buttons] false))))
 
-(defn buttons-open [game money click-chan caravan button-plant button-chop button-spray]
+(defn buttons-open [money click-chan caravan button-plant button-chop button-spray]
   (go
     (loop [boid-plant (button-boid caravan 50 0)
            boid-chop (button-boid caravan 0 (/ Math/PI 0.5 3))
@@ -119,21 +120,21 @@
       (sprite/set-pos! button-spray (:pos boid-spray))
 
       ;; keep 'arriving' while buttons is still true
-      (if (-> @game :walker :buttons)
+      (if (-> @g/game :walker :buttons)
         ;; buttons is still true
         (let [[v c] (alts! #js [(events/next-frame) click-chan])]
           (if (= c click-chan)
             (case v
               :plant
-              (if (zero? (-> @game :seeds))
+              (if (zero? (-> @g/game :seeds))
                 ;; man button inactive and clicked
-                (<! (close-buttons game caravan button-plant button-chop button-spray boid-plant boid-chop boid-spray))
+                (<! (close-buttons caravan button-plant button-chop button-spray boid-plant boid-chop boid-spray))
 
                 ;; plant
                 (do
                   (sound/play-sound :button-select 0.7 false)
                   (<! (grow-and-fade button-plant))
-                  (swap! game
+                  (swap! g/game
                          #(->
                            %
                            (update-in [:walker :buttons] not)
@@ -141,27 +142,27 @@
                            (assoc-in [:walker :action-count] 0)))))
 
               :spray
-              (if (>= money (-> @game :levels :faster :cost))
+              (if (>= money (-> @g/game :levels :faster :cost))
                 (do
                   (sound/play-sound :button-select 0.7 false)
                   (<! (grow-and-fade button-chop))
-                  (activate! game :faster))
+                  (activate! :faster))
 
                 ;; no money for faster
-                (<! (close-buttons game caravan button-plant button-chop button-spray boid-plant boid-chop boid-spray)))
+                (<! (close-buttons caravan button-plant button-chop button-spray boid-plant boid-chop boid-spray)))
 
               :chop
-              (if (>= money (-> @game :levels :seed :cost))
+              (if (>= money (-> @g/game :levels :seed :cost))
                 (do
                   (sound/play-sound :button-select 0.7 false)
                   (<! (grow-and-fade button-spray))
-                  (activate! game :seed))
+                  (activate! :seed))
 
                 ;; not enough money
-                (<! (close-buttons game caravan button-plant button-chop button-spray boid-plant boid-chop boid-spray)))
+                (<! (close-buttons caravan button-plant button-chop button-spray boid-plant boid-chop boid-spray)))
 
               ;; unknown button clicked
-              (<! (close-buttons game caravan button-plant button-chop button-spray boid-plant boid-chop boid-spray)))
+              (<! (close-buttons caravan button-plant button-chop button-spray boid-plant boid-chop boid-spray)))
 
             ;; no button is clicked.
             (recur (b/arrive boid-plant
@@ -182,10 +183,10 @@
                                (/ Math/PI 0.25 3))) 50.0))))
 
         ;; buttons has turned false
-        (<! (close-buttons game caravan button-plant button-chop button-spray boid-plant boid-chop boid-spray))))))
+        (<! (close-buttons caravan button-plant button-chop button-spray boid-plant boid-chop boid-spray))))))
 
 
-(defn appear [assets click-chan canvas game walker]
+(defn appear [assets click-chan canvas walker]
   (go
     (m/with-sprite canvas :float
       [button-plant (sprite/make-sprite
@@ -205,32 +206,32 @@
                     :mousedown #(put! click-chan :spray))]
 
       ;; turn buttons on and off depending on cost
-      (let [money (:dollars @game)]
-        (button-enable-disable game walker button-plant button-chop button-spray)
+      (let [money (:dollars @g/game)]
+        (button-enable-disable walker button-plant button-chop button-spray)
 
         ;; move button out and up
-        (<! (buttons-open game money click-chan walker button-plant button-chop button-spray))))))
+        (<! (buttons-open money click-chan walker button-plant button-chop button-spray))))))
 
 ;; 'thread' to handle buttons on caravan
-(defn button-thread [game canvas walker assets click-chan]
+(defn button-thread [canvas walker assets click-chan]
   (go
     (set! (.-interactive walker) true)
     (set! (.-mousedown walker)
           ;; click on the walker
           (fn [ev]
             ;; open action icons go-thread
-            (swap! game update-in [:walker :buttons] not)))
+            (swap! g/game update-in [:walker :buttons] not)))
 
     ;; forever
     (loop []
       (<! (events/next-frame))
 
       ;; buttons flips to true
-      (when (-> @game :walker :buttons)
-        (swap! game assoc-in [:caravan :buttons] false)
+      (when (-> @g/game :walker :buttons)
+        (swap! g/game assoc-in [:caravan :buttons] false)
         (sound/play-sound :button-open 0.5 false)
 
         ;; appear
-        (<! (appear assets click-chan canvas game walker)))
+        (<! (appear assets click-chan canvas walker)))
 
       (recur))))

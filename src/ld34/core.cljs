@@ -424,7 +424,7 @@
                 (c/button-thread g/game canvas caravan assets click-chan)
 
                 ;; 'thread' to handle buttons on walker
-                (w/button-thread g/game canvas walker assets click-chan)
+                (w/button-thread canvas walker assets click-chan)
 
                 ;; (go
                 ;;   ;; forever
