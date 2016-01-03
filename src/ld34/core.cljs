@@ -232,11 +232,6 @@
               nil
               ))
 
-          update-flies flies/update-fly
-          update-tree-chop tree/update-chop
-          chop-tree-go-thread tree/chop-tree-go-thread
-          hippy-go-thread hippy/hippy-go-thread
-
           ;; TODO: exit this thread on death
           fly-go-thread flies/go-thread
 
@@ -269,7 +264,7 @@
        (for [fly (-> @g/game :flies)]
          (do
            (.addChild (-> canvas :layer :world) (:sprite fly))
-           (fly-go-thread fly))))
+           (flies/go-thread fly))))
 
       ;; add the first hippies
       (doall
@@ -278,7 +273,7 @@
                                         ;(log "ADDING HIPPY" (:sprite hippy))
            (.addChild (-> canvas :layer :world) (:sprite hippy))
                                         ;(log "go thread")
-           (hippy-go-thread g/game canvas hippy))))
+           (hippy/hippy-go-thread hippy))))
 
 
 
@@ -485,7 +480,7 @@
                                      (update-in [:walker :action-count] inc)
                                      (update :frame inc)
                                      (update :plants update-plants)
-                                     (update :flies update-flies)))
+                                     (update :flies flies/update-fly)))
 
                   (<! (events/next-frame))
 
