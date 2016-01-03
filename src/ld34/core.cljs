@@ -421,7 +421,7 @@
                     dest (atom (vec2/vec2 0.1 0.1))]
 
                 ;; caravan button controller
-                (c/button-thread g/game canvas caravan assets click-chan)
+                (c/button-thread canvas caravan assets click-chan)
 
                 ;; 'thread' to handle buttons on walker
                 (w/button-thread canvas walker assets click-chan)
